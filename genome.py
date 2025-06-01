@@ -47,6 +47,10 @@ class MutationControl:
 class Genome:
     """Heritable information to create a creature."""
 
+    PROPORTIONAL_NOISE_SCALE = 1.0
+    LINEAR_NOISE_SCALE = 0.1
+    EXPONENTIAL_NOISE_SCALE = 0.005
+
     def __init(self):
         self.vision_radius = 0
 
@@ -89,38 +93,60 @@ class Genome:
     def mutate(self) -> None:
         self._mutate_network_architecture()
 
-        self._mutate_positive_values(self.private_feature_coefficients, self.mutation_control.private_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
-        self._mutate_positive_values(self.public_feature_coefficients, self.mutation_control.public_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
-        self._mutate_positive_values(self.param_coefficients, self.mutation_control.param_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
-        self._mutate_real_values(self.private_feature_biases, self.mutation_control.private_feature_bias_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
-        self._mutate_real_values(self.public_feature_biases, self.mutation_control.public_feature_bias_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+        self._mutate_positive(self.private_feature_coefficients, self.mutation_control.private_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+        self._mutate_positive(self.public_feature_coefficients, self.mutation_control.public_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+        self._mutate_positive(self.param_coefficients, self.mutation_control.param_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+        self._mutate_real(self.private_feature_biases, self.mutation_control.private_feature_bias_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+        self._mutate_real(self.public_feature_biases, self.mutation_control.public_feature_bias_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
         for weights, weights_mutsup, biases, biases_mutsup in zip(self.network.weights, self.mutation_control.network_mutsup.weights, self.network.biases, self.mutation_control.network_mutsup.biases):
-            self._mutate_real_values(weights, weights_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
-            self._mutate_real_values(biases, biases_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+            self._mutate_real(weights, weights_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
+            self._mutate_real(biases, biases_mutsup, -BIGGEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
 
-        self._mutate_positive_values(self.mutation_control.private_feature_coeff_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
-        self._mutate_positive_values(self.mutation_control.private_feature_bias_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
-        self._mutate_positive_values(self.mutation_control.public_feature_coeff_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
-        self._mutate_positive_values(self.mutation_control.public_feature_bias_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self._mutate_positive(self.mutation_control.private_feature_coeff_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self._mutate_positive(self.mutation_control.private_feature_bias_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self._mutate_positive(self.mutation_control.public_feature_coeff_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self._mutate_positive(self.mutation_control.public_feature_bias_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
         for weights, weights_mutsup, biases, biases_mutsup in zip(self.network.weights, self.mutation_control.network_mutsup.weights, self.network.biases, self.mutation_control.network_mutsup.biases):
-            self._mutate_positive_values(weights_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
-            self._mutate_positive_values(biases_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+            self._mutate_positive(weights_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+            self._mutate_positive(biases_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
         
-        self._mutate_interval_values(self.mutation_control.interval_mutation_rates, self.mutation_control.meta_mutsup)
+        self._mutate_interval(self.mutation_control.interval_mutation_rates, self.mutation_control.meta_mutsup)
 
-        self._mutate_positive_values(self.mutation_control.meta_mutsup, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self.mutation_control.meta_mutsup = self._mutate_positive(np.array([self.mutation_control.meta_mutsup]), self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)[0]
 
     def _mutate_network_architecture(self) -> None:
         pass
 
-    def _mutate_real_values(values: np.array_like, mutsup: np.array_like, min_value: np.float64, max_value: np.float64) -> None:
-        pass
+    def _mutate_real(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.array_like, max_value: np.array_like) -> None:
+        proportional_noise = np.random.normal(0, self.PROPORTIONAL_NOISE_SCALE, values.shape)
+        np.multiply(proportional_noise, values, out=proportional_noise)
+        linear_noise = np.random.normal(0, self.LINEAR_NOISE_SCALE, values.shape)
+        noise = np.add(proportional_noise, linear_noise, out=linear_noise) # invalidates linear_noise
+        suppression_factor = np.exp(-mutsup, out=proportional_noise) # invalidates proportional_noise
+        np.multiply(noise, suppression_factor, out=noise)
+        np.add(values, noise, out=values)
+        if np.any(values < min_value) | np.any(values > max_value):
+            warnings.warn(f"Real values exceeded reasonable bounds, clipping to [{min_value}, {max_value}]")
+            values.clip(min_value, max_value, out=values)
 
-    def _mutate_positive_values(values: np.array_like, mutsup: np.array_like, min_value: np.float64, max_value: np.float64) -> None:
-        pass
+    def _mutate_positive(self, values: np.ndarray, mutsup: np.array_like, min_value: np.array_like, max_value: np.array_like) -> None:
+        noise = np.random.normal(0, self.EXPONENTIAL_NOISE_SCALE, values.shape)
+        np.divide(noise, mutsup, out=noise)
+        np.exp(noise, out=values)
+        if np.any(values < min_value) | np.any(values > max_value):
+            warnings.warn(f"Positive values exceeded reasonable bounds, clipping to [{min_value}, {max_value}]")
+            values.clip(min_value, max_value, out=values)
     
-    def _mutate_interval_values(values: np.array_like, mutsup: np.array_like) -> None:
-        pass
+    def _mutate_interval(self, values: np.ndarray, mutsup: np.array_like) -> None:
+        smaller_answer = values < 0.5
+        tax_values = indel_suppression_tax_curve(values)
+        self._mutate_real(tax_values, mutsup, 0, 1)
+        negative_mask = tax_values < 0
+        tax_values[negative_mask] = -tax_values[negative_mask]
+        smaller_answer[negative_mask] = ~smaller_answer[negative_mask]
+        x1, x2 = inverse_indel_suppression_tax_curve(tax_values)
+        values[smaller_answer] = x1[smaller_answer]
+        values[~smaller_answer] = x2[~smaller_answer]
 
 INDEL_CHANCE_FOR_GEO_MEAN_TAX = 0.1
 LARGE_INSERT_SUPPRESSION_TAX_BASE = 1.001
