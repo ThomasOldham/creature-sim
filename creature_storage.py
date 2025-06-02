@@ -1,12 +1,6 @@
 import numpy as np
-import cell_stats
 import creature_stats
 import network_outputs
-
-def _feature_count(vision_radius: int) -> int:
-    perception_feature_count = cell_stats.NUM_FEATURES * (2 * vision_radius + 1) ** 2
-    private_feature_count = creature_stats.NUM_PRIVATE_FEATURES
-    return perception_feature_count + private_feature_count
 
 class CreatureStorage:
     """Manages parallel arrays collectively representing Creatures.
