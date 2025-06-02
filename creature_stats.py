@@ -84,3 +84,26 @@ UPGRADE_COSTS = np.array([
     10.0,  # ATTACK_POWER
     100.0,  # HEAL_POWER
 ], dtype=np.float64)
+
+STARTING_VALUES = np.array([
+    0.5,  # x sub-position
+    0.5,  # y sub-position
+    0.0,  # last dx
+    0.0,  # last dy
+    0.0,  # last success
+    0.0,  # age
+    10.0,  # max hp
+    0.0,  # eat rate
+    0.0,  # move rate
+    0.0,  # attack power
+    0.0,  # heal power
+    np.nan,  # mass
+    np.nan,  # min mass
+    0.0,  # last cost
+    0.0,  # last damage received
+    0.0,  # damage
+    0.0,  # last damage dx sum
+    0.0,  # last damage dy sum
+    -1.0,  # last action
+    np.nan,  # brain mass
+])

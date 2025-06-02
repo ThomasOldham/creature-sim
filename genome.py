@@ -61,7 +61,7 @@ class Genome:
     LINEAR_NOISE_SCALE = 0.1
     EXPONENTIAL_NOISE_SCALE = 0.005
 
-    def __init(self):
+    def __init__(self):
         self.vision_radius = 0
 
         self.private_feature_coefficients = np.concatenate([
@@ -102,6 +102,7 @@ class Genome:
     
     def mutate(self) -> None:
         self._mutate_network_architecture()
+        self._mutate_vision()
 
         self._mutate_positive(self.private_feature_coefficients, self.mutation_control.private_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
         self._mutate_positive(self.public_feature_coefficients, self.mutation_control.public_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
@@ -158,6 +159,14 @@ class Genome:
                     # Mirror the neuron pruning in the suppression network
                     self.mutation_control.network_mutsup.prune_neuron(layer_idx, neuron_idx)
             layer_idx += 1
+    
+    def _mutate_vision(self) -> None:
+        if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_GAIN_VISION]:
+            self.vision_radius += 1
+        if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_LOSE_VISION]:
+            self.vision_radius -= 1
+        if self.vision_radius < 0:
+            self.vision_radius = 0
 
     def _mutate_real(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.array_like, max_value: np.array_like) -> None:
         proportional_noise = np.random.normal(0, self.PROPORTIONAL_NOISE_SCALE, values.shape)
