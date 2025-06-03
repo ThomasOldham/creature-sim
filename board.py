@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from creature_storage import CreatureStorage
 from genome import Genome
 import cell_stats
@@ -31,9 +31,10 @@ class Board:
         index = self.creature_storage.allocate(genome.vision_radius)
         self.creature_storage.stats[index] = creature_stats.INITIAL_STATS
         self.creature_storage.param_coefficients[index] = genome.param_coefficients
-        self.creature_storage.genomes[index] = genome
+        self.creature_storage.genome[index] = genome
+        self.creature_storage.is_alive[index] = True
         feature_storage = self.creature_storage.features_storages[genome.vision_radius]
-        features_index = self.creature_storage.features_indices[index]
+        features_index = self.creature_storage.features_index[index]
         feature_storage.feature_coefficients[features_index] = genome.feature_coefficients()
         feature_storage.feature_biases[features_index] = genome.feature_biases()
         return index
@@ -44,14 +45,43 @@ class Board:
         self._add_food()
         self._abiogenesis()
     
-    def cell_features(self) -> np.ndarray:
-        if self._cell_features_padding < self._max_vision:
-            self._cell_features_padding = self._max_vision
-            self._cell_features = np.full((self.width, self.height, cell_stats.NUM_FEATURES), -1.0, dtype=np.float64)
-        np.add(self.food, 1.0, out=self._cell_features[:, :, cell_stats.FOOD_FEATURE])
-        np.exp(self._cell_features[:, :, cell_stats.FOOD_FEATURE], out=self._cell_features[:, :, cell_stats.FOOD_FEATURE])
-        self._creature_public_features(out = self._cell_features[:, :, creature_stats.PUBLIC_LOG_FEATURES_START:creature_stats.PUBLIC_LOG_FEATURES_END])
-        return self._cell_features
+    def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
+        if not outs:
+            outs = [np.zeros_like(storage.feature_coefficients) for storage in self.creature_storage.features_storages]
+        all_private_features = creature.private_features(self.creature_storage)
+        all_cell_features = self._cell_features()
+        for vision_radius in range(self._max_vision):
+            living_and_vision_mask = self.creature_storage.is_alive & (self.creature_storage.vision_radius == vision_radius)
+            features_indices = self.creature_storage.features_index[living_and_vision_mask]
+
+            self_features = all_private_features[living_and_vision_mask]
+            outs[vision_radius][features_indices][:creature_stats.NUM_PRIVATE_FEATURES] = self_features
+
+            # TODO: perception features
+            features_storage = self.creature_storage.features_storages[vision_radius]
+            creature_coords = np.full((features_storage.row_count, 2), -1, dtype=np.int64)
+            creature_coords[features_indices] = self.creature_storage.grid_position[living_and_vision_mask]
+            grid_x = creature_coords[:, 0]
+            grid_x = grid_x[grid_x >= 0]
+            grid_y = creature_coords[:, 1]
+            grid_y = grid_y[grid_y >= 0]
+            
+            # Create position arrays for perception
+            vision_size = 2 * vision_radius + 1
+            perceived_x = np.empty((grid_x.shape[0], 2*vision_radius+1, 2*vision_radius+1), dtype=np.int64)
+            perceived_x[:, :, :] = 
+            
+            # Get perception squares and reshape
+            perception_squares = all_cell_features[perceived_y, perceived_x]
+            perception_features = perception_squares.reshape(len(features_indices), -1)
+            
+            # Copy perception features to output
+            outs[vision_radius][features_indices][creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
+
+            features_storage = self.creature_storage.features_storages[vision_radius]
+            np.multiply(outs[vision_radius], features_storage.feature_coefficients, out=outs[vision_radius])
+            np.add(outs[vision_radius], features_storage.feature_biases, out=outs[vision_radius])
+        return outs
     
     def _add_food_rate_spikes(self) -> None:
         spikes = np.random.rand_like(self._food_rates)
@@ -74,6 +104,15 @@ class Board:
             index = self.add_creature(Genome.random())
             self.creatures[y, x] = index
             self.food[y, x] -= self._ABIOGENESIS_THRESHOLD
+    
+    def _cell_features(self) -> np.ndarray:
+        if self._cell_features_padding < self._max_vision:
+            self._cell_features_padding = self._max_vision
+            self._cell_features = np.full((self.width, self.height, cell_stats.NUM_FEATURES), -1.0, dtype=np.float64)
+        np.add(self.food, 1.0, out=self._cell_features[:, :, cell_stats.FOOD_FEATURE])
+        np.exp(self._cell_features[:, :, cell_stats.FOOD_FEATURE], out=self._cell_features[:, :, cell_stats.FOOD_FEATURE])
+        self._creature_public_features(out = self._cell_features[:, :, creature_stats.PUBLIC_LOG_FEATURES_START:creature_stats.PUBLIC_LOG_FEATURES_END])
+        return self._cell_features
 
     def _creature_public_features(self, out: Optional[np.ndarray] = None) -> np.ndarray:
         if out is None:

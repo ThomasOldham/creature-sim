@@ -33,8 +33,8 @@ class InputTransformStorage:
         self.row_count = 1
         
         # Initialize parallel arrays with one row
-        self.feature_coefficients = np.full((self.feature_count, 1), np.nan, dtype=np.float64)
-        self.feature_biases = np.full((self.feature_count, 1), np.nan, dtype=np.float64)
+        self.feature_coefficients = np.full((1, self.feature_count), np.nan, dtype=np.float64)
+        self.feature_biases = np.full((1, self.feature_count), np.nan, dtype=np.float64)
         
         # Track allocation state
         self._max_used_index = -1
@@ -59,11 +59,11 @@ class InputTransformStorage:
         if self._max_used_index >= self.row_count:
             new_row_count = self.row_count * 2
             # Create new arrays with doubled size
-            new_feature_coefficients = np.full((self.feature_count, new_row_count), np.nan, dtype=np.float64)
-            new_feature_biases = np.full((self.feature_count, new_row_count), np.nan, dtype=np.float64)
+            new_feature_coefficients = np.full((new_row_count, self.feature_count), np.nan, dtype=np.float64)
+            new_feature_biases = np.full((new_row_count, self.feature_count), np.nan, dtype=np.float64)
             # Copy old values
-            new_feature_coefficients[:, :self.row_count] = self.feature_coefficients
-            new_feature_biases[:, :self.row_count] = self.feature_biases
+            new_feature_coefficients[:self.row_count, :] = self.feature_coefficients
+            new_feature_biases[:self.row_count, :] = self.feature_biases
             # Replace old arrays
             self.feature_coefficients = new_feature_coefficients
             self.feature_biases = new_feature_biases

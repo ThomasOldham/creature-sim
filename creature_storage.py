@@ -16,19 +16,20 @@ class CreatureStorage:
         self.row_count = 1
         
         # Initialize parallel arrays with one row
-        self.stats = np.full((creature_stats.COUNT, 1), np.nan, dtype=np.float64)
-        self.param_coefficients = np.full((network_outputs.PARAMS_COUNT, 1), np.nan, dtype=np.float64)
+        self.stats = np.full((1, creature_stats.COUNT), np.nan, dtype=np.float64)
+        self.param_coefficients = np.full((1, network_outputs.PARAMS_COUNT), np.nan, dtype=np.float64)
         self.is_alive = np.zeros(1, dtype=bool)
-        self.genomes = [None]
+        self.genome = [None]
+        self.grid_position = np.full((1, 2), -1, dtype=np.int64)
         
         # Track allocation state
         self._max_used_index = -1
         self._free_indices = set()
         
         # Vision radius tracking
-        self.vision_radii = np.full(1, -1, dtype=np.int64)  # -1 indicates unused
-        self.features_indices = np.full(1, -1, dtype=np.int64)  # -1 indicates unused
-        self.features_storages = [InputTransformStorage(0)]  # Start with vision radius 0
+        self.vision_radius = np.full(1, -1, dtype=np.int64)
+        self.features_index = np.full(1, -1, dtype=np.int64)
+        self.features_storages = []
         
     def allocate(self, vision_radius: int) -> int:
         """Allocate a new row for a creature.
@@ -52,26 +53,29 @@ class CreatureStorage:
             if index >= self.row_count:
                 new_row_count = self.row_count * 2
                 # Create new arrays with doubled size
-                new_stats = np.full((creature_stats.COUNT, new_row_count), np.nan, dtype=np.float64)
-                new_param_coefficients = np.full((network_outputs.PARAMS_COUNT, new_row_count), np.nan, dtype=np.float64)
+                new_stats = np.full((new_row_count, creature_stats.COUNT), np.nan, dtype=np.float64)
+                new_param_coefficients = np.full((new_row_count, network_outputs.PARAMS_COUNT), np.nan, dtype=np.float64)
                 new_is_alive = np.zeros(new_row_count, dtype=bool)
-                new_vision_radii = np.full(new_row_count, -1, dtype=np.int64)
-                new_features_indices = np.full(new_row_count, -1, dtype=np.int64)
-                new_genomes = [None] * new_row_count
+                new_vision_radius = np.full(new_row_count, -1, dtype=np.int64)
+                new_features_index = np.full(new_row_count, -1, dtype=np.int64)
+                new_genome = [None] * new_row_count
+                new_grid_position = np.full((new_row_count, 2), -1, dtype=np.int64)
                 # Copy old values
-                new_stats[:, :self.row_count] = self.stats
-                new_param_coefficients[:, :self.row_count] = self.param_coefficients
+                new_stats[:self.row_count, :] = self.stats
+                new_param_coefficients[:self.row_count, :] = self.param_coefficients
                 new_is_alive[:self.row_count] = self.is_alive
-                new_vision_radii[:self.row_count] = self.vision_radii
-                new_features_indices[:self.row_count] = self.features_indices
-                new_genomes[:self.row_count] = self.genomes
+                new_vision_radius[:self.row_count] = self.vision_radius
+                new_features_index[:self.row_count] = self.features_index
+                new_genome[:self.row_count] = self.genome
+                new_grid_position[:self.row_count, :] = self.grid_position
                 # Replace old arrays
                 self.stats = new_stats
                 self.param_coefficients = new_param_coefficients
                 self.is_alive = new_is_alive
-                self.vision_radii = new_vision_radii
-                self.features_indices = new_features_indices
-                self.genomes = new_genomes
+                self.vision_radius = new_vision_radius
+                self.features_index = new_features_index
+                self.genome = new_genome
+                self.grid_position = new_grid_position
                 self.row_count = new_row_count
         
         # Ensure we have enough features storages
@@ -82,8 +86,8 @@ class CreatureStorage:
         features_index = self.features_storages[vision_radius].allocate()
         
         # Record the vision radius and features index
-        self.vision_radii[index] = vision_radius
-        self.features_indices[index] = features_index
+        self.vision_radius[index] = vision_radius
+        self.features_index[index] = features_index
         
         return index
     
@@ -102,8 +106,8 @@ class CreatureStorage:
             raise ValueError(f"Row {index} is already released")
             
         # Release the features storage allocation
-        vision_radius = self.vision_radii[index]
-        features_index = self.features_indices[index]
+        vision_radius = self.vision_radius[index]
+        features_index = self.features_index[index]
         self.features_storages[vision_radius].release(features_index)
         self._free_indices.add(index)
     
