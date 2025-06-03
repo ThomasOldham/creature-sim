@@ -50,37 +50,9 @@ class Board:
         if not outs:
             outs = [np.zeros((storage.used_row_count(), storage.feature_count)) for storage in creature_storage.features_storages]
         all_private_features = creature.private_features(creature_storage)
-        all_cell_features = self._cell_features()
+        all_cell_features = self._get_cell_features()
         for vision_radius in range(self._max_vision):
-            # TODO: Actually supporting multiple vision radii is hard, so use just one radius and
-            #       skip the rest for now. This means we assume only one features_storage is populated,
-            #       and it's parallel to the creatures_storage.
-            features_storage = creature_storage.features_storages[vision_radius]
-            if features_storage.max_used_index() == 0:
-                continue
-
-            # self features
-            self_features = all_private_features
-            outs[vision_radius][:creature_stats.NUM_PRIVATE_FEATURES] = self_features
-
-            # perception features
-            creature_coords = creature_storage.grid_position[creature_storage.used_row_count()]
-            grid_x = creature_coords[:, 0]
-            grid_y = creature_coords[:, 1]
-            vision_length = 2*vision_radius+1
-            perceived_x = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
-            perceived_x[:] = np.arange(vision_length)[:]
-            perceived_x += grid_x[:, np.newaxis, np.newaxis]
-            perceived_y = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
-            perceived_y[:] = np.arange(vision_length)[:, np.newaxis]
-            perceived_y += grid_y[:, np.newaxis, np.newaxis]
-            perception_squares = all_cell_features[perceived_y, perceived_x]
-            perception_features = perception_squares.reshape(len(grid_x), -1)
-            outs[vision_radius][creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
-
-            # apply coefficients and biases
-            np.multiply(outs[vision_radius], features_storage.feature_coefficients, out=outs[vision_radius])
-            np.add(outs[vision_radius], features_storage.feature_biases, out=outs[vision_radius])
+            self._all_features_for_vision_radius(vision_radius, all_private_features, all_cell_features, outs[vision_radius])
         return outs
     
     def _add_food_rate_spikes(self) -> None:
@@ -105,7 +77,7 @@ class Board:
             self.creatures[y, x] = index
             self.food[y, x] -= self._ABIOGENESIS_THRESHOLD
     
-    def _cell_features(self) -> np.ndarray:
+    def _get_cell_features(self) -> np.ndarray:
         if self._cell_features_padding < self._max_vision:
             self._cell_features_padding = self._max_vision
             self._cell_features = np.full((self.width, self.height, cell_stats.NUM_FEATURES), -1.0, dtype=np.float64)
@@ -121,3 +93,35 @@ class Board:
         creature_present = self.creatures >= 0
         np.where(creature_present, indexed_features[out], creature.DEFAULT_PUBLIC_FEATURES, out=out)
         return out
+    
+    def _all_features_for_vision_radius(self, vision_radius: int, all_private_features: np.ndarray, all_cell_features: np.ndarray, out: np.ndarray) -> None:
+        creature_storage = self.creature_storage
+        features_storage = creature_storage.features_storages[vision_radius]
+        # TODO: Actually supporting multiple vision radii is hard, so use just one radius and
+        #       skip the rest for now. This means we assume only one features_storage is populated,
+        #       and it's parallel to the creatures_storage.
+        if features_storage.max_used_index() == 0:
+            return
+        
+        # self features
+        self_features = all_private_features
+        out[:creature_stats.NUM_PRIVATE_FEATURES] = self_features
+
+        # perception features
+        creature_coords = creature_storage.grid_position[creature_storage.used_row_count()]
+        grid_x = creature_coords[:, 0]
+        grid_y = creature_coords[:, 1]
+        vision_length = 2*vision_radius+1
+        perceived_x = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
+        perceived_x[:] = np.arange(vision_length)[:]
+        perceived_x += grid_x[:, np.newaxis, np.newaxis]
+        perceived_y = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
+        perceived_y[:] = np.arange(vision_length)[:, np.newaxis]
+        perceived_y += grid_y[:, np.newaxis, np.newaxis]
+        perception_squares = all_cell_features[perceived_y, perceived_x]
+        perception_features = perception_squares.reshape(len(grid_x), -1)
+        out[creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
+
+        # apply coefficients and biases
+        np.multiply(out, features_storage.feature_coefficients, out=out)
+        np.add(out, features_storage.feature_biases, out=out)
