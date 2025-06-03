@@ -62,7 +62,7 @@ class Genome:
     _EXPONENTIAL_NOISE_SCALE = 0.005
 
     def __init__(self):
-        self.vision_radius = 0
+        self.vision_radius = 3 # TODO: temporary universal fixed vision radius
 
         self.self_feature_coefficients = np.concatenate([
             np.ones(creature_stats.PRIVATE_LINEAR_FEATURES_END - creature_stats.PRIVATE_LINEAR_FEATURES_START),
@@ -114,7 +114,7 @@ class Genome:
     
     def mutate(self) -> None:
         self._mutate_network_architecture()
-        self._mutate_vision()
+        # self._mutate_vision() # TODO: temporary universal fixed vision radius
 
         self._mutate_positive(self.self_feature_coefficients, self.mutation_control.self_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)
         self._mutate_positive(self.perception_feature_coefficients, self.mutation_control.perception_feature_coeff_mutsup, SMALLEST_MAGNITUDE_ALLOWED, BIGGEST_MAGNITUDE_ALLOWED)

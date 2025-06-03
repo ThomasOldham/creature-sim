@@ -46,39 +46,39 @@ class Board:
         self._abiogenesis()
     
     def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
+        creature_storage = self.creature_storage
         if not outs:
-            outs = [np.zeros_like(storage.feature_coefficients) for storage in self.creature_storage.features_storages]
-        all_private_features = creature.private_features(self.creature_storage)
+            outs = [np.zeros((storage.used_row_count(), storage.feature_count)) for storage in creature_storage.features_storages]
+        all_private_features = creature.private_features(creature_storage)
         all_cell_features = self._cell_features()
         for vision_radius in range(self._max_vision):
-            living_and_vision_mask = self.creature_storage.is_alive & (self.creature_storage.vision_radius == vision_radius)
-            features_indices = self.creature_storage.features_index[living_and_vision_mask]
+            # TODO: Actually supporting multiple vision radii is hard, so use just one radius and
+            #       skip the rest for now. This means we assume only one features_storage is populated,
+            #       and it's parallel to the creatures_storage.
+            features_storage = creature_storage.features_storages[vision_radius]
+            if features_storage.max_used_index() == 0:
+                continue
 
-            self_features = all_private_features[living_and_vision_mask]
-            outs[vision_radius][features_indices][:creature_stats.NUM_PRIVATE_FEATURES] = self_features
+            # self features
+            self_features = all_private_features
+            outs[vision_radius][:creature_stats.NUM_PRIVATE_FEATURES] = self_features
 
-            # TODO: perception features
-            features_storage = self.creature_storage.features_storages[vision_radius]
-            creature_coords = np.full((features_storage.row_count, 2), -1, dtype=np.int64)
-            creature_coords[features_indices] = self.creature_storage.grid_position[living_and_vision_mask]
+            # perception features
+            creature_coords = creature_storage.grid_position[creature_storage.used_row_count()]
             grid_x = creature_coords[:, 0]
-            grid_x = grid_x[grid_x >= 0]
             grid_y = creature_coords[:, 1]
-            grid_y = grid_y[grid_y >= 0]
-            
-            # Create position arrays for perception
-            vision_size = 2 * vision_radius + 1
-            perceived_x = np.empty((grid_x.shape[0], 2*vision_radius+1, 2*vision_radius+1), dtype=np.int64)
-            perceived_x[:, :, :] = 
-            
-            # Get perception squares and reshape
+            vision_length = 2*vision_radius+1
+            perceived_x = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
+            perceived_x[:] = np.arange(vision_length)[:]
+            perceived_x += grid_x[:, np.newaxis, np.newaxis]
+            perceived_y = np.empty((grid_x.shape[0], vision_length, vision_length), dtype=np.int64)
+            perceived_y[:] = np.arange(vision_length)[:, np.newaxis]
+            perceived_y += grid_y[:, np.newaxis, np.newaxis]
             perception_squares = all_cell_features[perceived_y, perceived_x]
-            perception_features = perception_squares.reshape(len(features_indices), -1)
-            
-            # Copy perception features to output
-            outs[vision_radius][features_indices][creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
+            perception_features = perception_squares.reshape(len(grid_x), -1)
+            outs[vision_radius][creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
 
-            features_storage = self.creature_storage.features_storages[vision_radius]
+            # apply coefficients and biases
             np.multiply(outs[vision_radius], features_storage.feature_coefficients, out=outs[vision_radius])
             np.add(outs[vision_radius], features_storage.feature_biases, out=outs[vision_radius])
         return outs
