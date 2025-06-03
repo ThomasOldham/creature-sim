@@ -93,7 +93,7 @@ STARTING_VALUES = np.array([
     0.0,  # last success
     0.0,  # age
     10.0,  # max hp
-    0.0,  # eat rate
+    10.0,  # eat rate
     0.0,  # move rate
     0.0,  # attack power
     0.0,  # heal power

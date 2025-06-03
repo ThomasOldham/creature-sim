@@ -19,13 +19,14 @@ class CreatureStorage:
         self.stats = np.full((creature_stats.COUNT, 1), np.nan, dtype=np.float64)
         self.param_coefficients = np.full((network_outputs.PARAMS_COUNT, 1), np.nan, dtype=np.float64)
         self.is_alive = np.zeros(1, dtype=bool)
+        self.genomes = [None]
         
         # Track allocation state
         self._max_used_index = -1
         self._free_indices = set()
         
         # Vision radius tracking
-        self.vision_radii = np.full(1, -1, dtype=np.int8)  # -1 indicates unused
+        self.vision_radii = np.full(1, -1, dtype=np.int64)  # -1 indicates unused
         self.features_indices = np.full(1, -1, dtype=np.int64)  # -1 indicates unused
         self.features_storages = [InputTransformStorage(0)]  # Start with vision radius 0
         
@@ -54,20 +55,23 @@ class CreatureStorage:
                 new_stats = np.full((creature_stats.COUNT, new_row_count), np.nan, dtype=np.float64)
                 new_param_coefficients = np.full((network_outputs.PARAMS_COUNT, new_row_count), np.nan, dtype=np.float64)
                 new_is_alive = np.zeros(new_row_count, dtype=bool)
-                new_vision_radii = np.full(new_row_count, -1, dtype=np.int8)
+                new_vision_radii = np.full(new_row_count, -1, dtype=np.int64)
                 new_features_indices = np.full(new_row_count, -1, dtype=np.int64)
+                new_genomes = [None] * new_row_count
                 # Copy old values
                 new_stats[:, :self.row_count] = self.stats
                 new_param_coefficients[:, :self.row_count] = self.param_coefficients
                 new_is_alive[:self.row_count] = self.is_alive
                 new_vision_radii[:self.row_count] = self.vision_radii
                 new_features_indices[:self.row_count] = self.features_indices
+                new_genomes[:self.row_count] = self.genomes
                 # Replace old arrays
                 self.stats = new_stats
                 self.param_coefficients = new_param_coefficients
                 self.is_alive = new_is_alive
                 self.vision_radii = new_vision_radii
                 self.features_indices = new_features_indices
+                self.genomes = new_genomes
                 self.row_count = new_row_count
         
         # Ensure we have enough features storages
