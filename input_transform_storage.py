@@ -1,6 +1,7 @@
 import numpy as np
 import cell_stats
 import creature_stats
+from execution_timer import timer_decorator
 
 def num_features_for_vision(vision_radius: int) -> int:
     """Calculate the number of features for a creature with the given vision radius.
@@ -23,6 +24,7 @@ class InputTransformStorage:
     with one row and doubling in size when full.
     """
     
+    @timer_decorator('InputTransformStorage.__init__')
     def __init__(self, vision_radius: int):
         """Initialize the input transform storage with parallel arrays starting at size 1.
         
@@ -40,6 +42,7 @@ class InputTransformStorage:
         self._max_used_index = -1
         self._free_indices = set()
     
+    @timer_decorator('InputTransformStorage.allocate')
     def allocate(self) -> int:
         """Allocate a new row for a creature.
         
@@ -71,6 +74,7 @@ class InputTransformStorage:
             
         return self._max_used_index
     
+    @timer_decorator('InputTransformStorage.release')
     def release(self, index: int) -> None:
         """Release a row back to the pool.
         

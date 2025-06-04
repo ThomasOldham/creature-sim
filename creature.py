@@ -3,6 +3,7 @@ from creature_storage import CreatureStorage
 from creature_stats import BRAIN_MASS, LAST_DAMAGE_DX_SUM, LAST_DAMAGE_DY_SUM, LAST_DAMAGE_RECEIVED, MASS, MAX_HP, MIN_MASS, NUM_PRIVATE_FEATURES, NUM_PUBLIC_FEATURES, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START, PRIVATE_LINEAR_FEATURES_END, PRIVATE_LINEAR_FEATURES_START, PRIVATE_LOG_FEATURES_END, PRIVATE_LOG_FEATURES_START, PRIVATE_MASS_FRACTION_FEATURES_END, PRIVATE_MASS_FRACTION_FEATURES_START, PRIVATE_MAX_HP_FRACTION_FEATURES_END, PRIVATE_MAX_HP_FRACTION_FEATURES_START, PUBLIC_LOG_FEATURES_END, PUBLIC_LOG_FEATURES_START, PUBLIC_MAX_HP_FRACTION_FEATURES_END, PUBLIC_MAX_HP_FRACTION_FEATURES_START, UPGRADEABLE_STAT_MASS_CONTRIBUTIONS, UPGRADEABLE_STATS_END, UPGRADEABLE_STATS_START
 from network_outputs import ACTION_KINDS_COUNT, PARAMS_MASS_FRACTIONS_END, PARAMS_MASS_FRACTIONS_START, PARAMS_SNAP_DIR_X_END, PARAMS_SNAP_DIR_X_START, PARAMS_SNAP_DIR_Y_END, PARAMS_SNAP_DIR_Y_START, PARAMS_TANH_END, PARAMS_TANH_START
 import numpy as np
+from execution_timer import timer_decorator
 
 def recalculate_min_mass(creature_storage: CreatureStorage) -> None:
     stats = creature_storage.stats
@@ -22,6 +23,7 @@ _PRIVATE_MASS_FRACTION_FEATURE_RANGE_END = _PRIVATE_LOG_FEATURE_RANGE_END + PRIV
 _PRIVATE_MAX_HP_FRACTION_FEATURE_RANGE_END = _PRIVATE_MASS_FRACTION_FEATURE_RANGE_END + PRIVATE_MAX_HP_FRACTION_FEATURES_END - PRIVATE_MAX_HP_FRACTION_FEATURES_START
 _PRIVATE_LAST_DAMAGE_FRACTION_FEATURE_RANGE_END = _PRIVATE_MAX_HP_FRACTION_FEATURE_RANGE_END + PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END - PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START
 
+@timer_decorator('creature.private_features')
 def private_features(creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), NUM_PRIVATE_FEATURES), dtype=np.float64)
@@ -41,6 +43,7 @@ def private_features(creature_storage: CreatureStorage, out: Optional[np.ndarray
 _PUBLIC_LOG_FEATURE_RANGE_END = PUBLIC_LOG_FEATURES_END-PUBLIC_LOG_FEATURES_START
 _PUBLIC_MAX_HP_FRACTION_FEATURE_RANGE_END = _PUBLIC_LOG_FEATURE_RANGE_END + PUBLIC_MAX_HP_FRACTION_FEATURES_END - PUBLIC_MAX_HP_FRACTION_FEATURES_START
 
+@timer_decorator('creature.public_features')
 def public_features(creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), NUM_PUBLIC_FEATURES), dtype=np.float64)
@@ -53,17 +56,20 @@ def public_features(creature_storage: CreatureStorage, out: Optional[np.ndarray]
 
 DEFAULT_PUBLIC_FEATURES = np.zeros(NUM_PUBLIC_FEATURES, dtype=np.float64)
 
+@timer_decorator('creature.transform_features')
 def transform_features(raw_features_by_vision: List[np.ndarray], creature_storage: CreatureStorage) -> None:
     for (features, features_storage) in zip(raw_features_by_vision, creature_storage.features_storages):
         np.multiply(features, features_storage.feature_coefficients, out=features)
         np.add(features, features_storage.feature_biases, out=features)
 
+@timer_decorator('creature.decide_action_kind')
 def decide_action_kind(network_outputs: np.ndarray) -> np.ndarray:
     normalized_chances = _normalize_action_probabilities(network_outputs[:, :ACTION_KINDS_COUNT])
         
     # Choose actions based on weighted random selection
     return (normalized_chances.cumsum(1) > np.random.rand(normalized_chances.shape[0])[:,None]).argmax(1)
 
+@timer_decorator('creature.action_params')
 def action_params(network_outputs: np.ndarray, creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), network_outputs.PARAMS_COUNT), dtype=np.float64)
@@ -95,6 +101,7 @@ def action_params(network_outputs: np.ndarray, creature_storage: CreatureStorage
     np.multiply(out, creature_storage.param_coefficients, out=out)
     return out
 
+@timer_decorator('creature._normalize_action_probabilities')
 def _normalize_action_probabilities(action_probabilities: np.ndarray) -> np.ndarray:
     """Normalize action probabilities, handling zero probability cases.
     
@@ -112,9 +119,11 @@ def _normalize_action_probabilities(action_probabilities: np.ndarray) -> np.ndar
     # Normalize probabilities
     return action_probabilities / np.sum(action_probabilities, axis=1)[:, np.newaxis]
 
+@timer_decorator('creature._available_mass')
 def _available_mass(creature_storage: CreatureStorage) -> np.ndarray:
     return creature_storage.stats[:, MASS] - creature_storage.stats[:, MIN_MASS]
 
+@timer_decorator('creature._snap_direction')
 def _snap_direction(dxs: np.ndarray, dys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Snap directions to cardinal or ordinal directions.
     

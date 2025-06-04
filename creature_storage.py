@@ -5,6 +5,7 @@ from genome import Genome
 import network_outputs
 from input_transform_storage import InputTransformStorage
 from neural_network import NeuralNetwork
+from execution_timer import timer_decorator
 
 class CreatureStorage:
     """Manages parallel arrays collectively representing Creatures.
@@ -35,19 +36,19 @@ class CreatureStorage:
         self.features_index = np.full(1, -1, dtype=np.int64)
         self.features_storages = []
         
+    @timer_decorator('CreatureStorage.allocate')
     def allocate(self, vision_radius: int) -> int:
         """Allocate a new row for a creature.
         
         Args:
-            vision_radius: The vision radius for this creature
+            vision_radius: The vision radius for the new creature
             
         Returns:
             int: Index of the allocated row
         """
         # Try to reuse a free index
         if self._free_indices:
-            index = min(self._free_indices)
-            self._free_indices.remove(index)
+            index = self._free_indices.pop()
         else:
             # No free indices, use the next available index
             self._max_used_index += 1
@@ -98,6 +99,7 @@ class CreatureStorage:
         
         return index
     
+    @timer_decorator('CreatureStorage.release')
     def release(self, index: int) -> None:
         """Release a row back to the pool.
         
@@ -119,9 +121,9 @@ class CreatureStorage:
         self._free_indices.add(index)
     
     def used_row_count(self) -> int:
-        """Get the number of rows currently in use.
+        """Get the number of used rows in the storage.
         
         Returns:
-            int: Number of rows in use
+            int: The number of used rows
         """
         return self._max_used_index + 1

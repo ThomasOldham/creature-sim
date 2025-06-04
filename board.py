@@ -5,6 +5,7 @@ import cell_stats
 import creature
 import creature_stats
 import numpy as np
+from execution_timer import timer_decorator
 
 class Board:
     def __init__(self, width: int, height: int):
@@ -26,6 +27,7 @@ class Board:
         self._max_vision = 0
         self._cell_features_padding = -1 # negative value forces initialization of _cell_features
     
+    @timer_decorator('Board.add_creature')
     def add_creature(self, genome: Genome) -> int:
         self._max_vision = max(self._max_vision, genome.vision_radius)
         index = self.creature_storage.allocate(genome.vision_radius)
@@ -41,6 +43,7 @@ class Board:
         feature_storage.feature_biases[features_index] = genome.feature_biases()
         return index
     
+    @timer_decorator('Board.setup_round')
     def setup_round(self) -> None:
         self._add_food_rate_spikes()
         self._decay_food_rates()
@@ -48,10 +51,12 @@ class Board:
         self._abiogenesis()
         creature.recalculate_min_mass(self.creature_storage)
     
+    @timer_decorator('Board.wrapup_round')
     def wrapup_round(self) -> None:
         self._apply_bmr()
         self._apply_starvation()
 
+    @timer_decorator('Board.apply_death')
     def apply_death(self, dead_creature_indices: np.ndarray) -> None:
         self.creature_storage.is_alive[dead_creature_indices] = False
         dead_positions = self.creature_storage.grid_position[dead_creature_indices]
@@ -60,7 +65,10 @@ class Board:
         self.food[dead_positions[:, 1], dead_positions[:, 0]] += dead_masses
         self.creatures[dead_positions[:, 1], dead_positions[:, 0]] = -1
         self.creature_storage.is_alive[dead_creature_indices] = False
+        for index in dead_creature_indices:
+            self.creature_storage.release(index)
     
+    @timer_decorator('Board.all_features')
     def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
         creature_storage = self.creature_storage
         if not outs:
@@ -72,30 +80,35 @@ class Board:
         creature.transform_features(outs, creature_storage)
         return outs
     
+    @timer_decorator('Board._add_food_rate_spikes')
     def _add_food_rate_spikes(self) -> None:
         spikes = np.random.rand_like(self._food_rates)
         np.power(spikes, 50.0, out=spikes)
         np.add(self._food_rates, spikes, out=self._food_rates)
 
+    @timer_decorator('Board._add_food')
     def _add_food(self) -> None:
         np.add(self.food, self._food_rates, out=self.food)
 
+    @timer_decorator('Board._decay_food_rates')
     def _decay_food_rates(self) -> None:
         np.multiply(self._food_rates, 0.993, out=self._food_rates)
     
     _ABIOGENESIS_THRESHOLD = 100.0
     _ABIOGENESIS_CHANCE = 0.000001
 
+    @timer_decorator('Board._abiogenesis')
     def _abiogenesis(self) -> None:
         spawn_mask = (self.food > self._ABIOGENESIS_THRESHOLD) & (np.random.rand_like(self.food) < self._ABIOGENESIS_CHANCE) & (self.creatures < 0)
         spawn_coords = np.where(spawn_mask)
         for y, x in zip(*spawn_coords):
-            index = self.add_creature(Genome.random())
+            index = self.add_creature(Genome())
             self.creatures[y, x] = index
             self.food[y, x] -= self._ABIOGENESIS_THRESHOLD
             self.creature_storage.grid_position[index] = np.array([x, y], dtype=np.int64)
             self.creature_storage.stats[index, creature_stats.MASS] = self._ABIOGENESIS_THRESHOLD
     
+    @timer_decorator('Board._get_cell_features')
     def _get_cell_features(self) -> np.ndarray:
         if self._cell_features_padding < self._max_vision:
             self._cell_features_padding = self._max_vision
@@ -105,6 +118,7 @@ class Board:
         self._creature_public_features(out = self._cell_features[:, :, creature_stats.PUBLIC_LOG_FEATURES_START:creature_stats.PUBLIC_LOG_FEATURES_END])
         return self._cell_features
 
+    @timer_decorator('Board._creature_public_features')
     def _creature_public_features(self, out: Optional[np.ndarray] = None) -> np.ndarray:
         if out is None:
             out = np.empty((self.creature_storage.used_row_count(), creature_stats.NUM_PUBLIC_FEATURES), dtype=np.float64)
@@ -113,13 +127,14 @@ class Board:
         np.where(creature_present, indexed_features[out], creature.DEFAULT_PUBLIC_FEATURES, out=out)
         return out
     
+    @timer_decorator('Board._untransformed_features_for_vision_radius')
     def _untransformed_features_for_vision_radius(self, vision_radius: int, all_private_features: np.ndarray, all_cell_features: np.ndarray, out: np.ndarray) -> None:
         creature_storage = self.creature_storage
         features_storage = creature_storage.features_storages[vision_radius]
         # TODO: Actually supporting multiple vision radii is hard, so use just one radius and
         #       skip the rest for now. This means we assume only one features_storage is populated,
         #       and it's parallel to the creatures_storage.
-        if features_storage.max_used_index() == 0:
+        if features_storage._max_used_index < 0:
             return
         
         # self features
@@ -141,11 +156,13 @@ class Board:
         perception_features = perception_squares.reshape(len(grid_x), -1)
         out[creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
     
+    @timer_decorator('Board._apply_bmr')
     def _apply_bmr(self) -> None:
         bmr = self.creature_storage.stats[:, creature_stats.MASS] + self.creature_storage.stats[:, creature_stats.MIN_MASS]
         np.divide(bmr, 2000.0, out=bmr)
         np.subtract(self.creature_storage.stats[:, creature_stats.MASS], bmr, out=self.creature_storage.stats[:, creature_stats.MASS])
 
+    @timer_decorator('Board._apply_starvation')
     def _apply_starvation(self) -> None:
         starved_mask = self.creature_storage.stats[:, creature_stats.MASS] < self.creature_storage.stats[:, creature_stats.MIN_MASS]
         self.apply_death(np.where(starved_mask))

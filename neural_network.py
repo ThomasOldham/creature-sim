@@ -1,7 +1,9 @@
 import numpy as np
 from typing import Optional
+from execution_timer import timer_decorator
 
 class NeuralNetwork:
+    @timer_decorator('NeuralNetwork.__init__')
     def __init__(self, layer_sizes: list[int], constant_value: Optional[float] = None):
         """Initialize a neural network with the given layer sizes.
         
@@ -32,6 +34,7 @@ class NeuralNetwork:
         """ReLU activation function."""
         return np.maximum(0, x)
         
+    @timer_decorator('NeuralNetwork.forward')
     def forward(self, x: np.ndarray) -> np.ndarray:
         """Forward pass through the network.
         

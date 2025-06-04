@@ -4,6 +4,7 @@ import copy
 import creature_stats
 import warnings
 import network_outputs
+from execution_timer import timer_decorator
 
 BIGGEST_MAGNITUDE_ALLOWED = np.float64(2.0**26.0)
 SMALLEST_MAGNITUDE_ALLOWED = 1/BIGGEST_MAGNITUDE_ALLOWED
@@ -22,6 +23,7 @@ class MutationControl:
 
     INITIAL_POINT_MUTSUP = 1.0
 
+    @timer_decorator('MutationControl.__init__')
     def __init__(self, like_self_features, like_perception_features, like_params, like_network):
         self.self_feature_coeff_mutsup = np.full_like(like_self_features, self.INITIAL_POINT_MUTSUP)
         self.self_feature_bias_mutsup = np.full_like(like_self_features, self.INITIAL_POINT_MUTSUP)
@@ -61,12 +63,13 @@ class Genome:
     _LINEAR_NOISE_SCALE = 0.1
     _EXPONENTIAL_NOISE_SCALE = 0.005
 
+    @timer_decorator('Genome.__init__')
     def __init__(self):
         self.vision_radius = 3 # TODO: temporary universal fixed vision radius
 
         self.self_feature_coefficients = np.concatenate([
             np.ones(creature_stats.PRIVATE_LINEAR_FEATURES_END - creature_stats.PRIVATE_LINEAR_FEATURES_START),
-            np.full(creature_stats.PRIVATE_LOG_FEATURES_END - creature_stats.PRIVATE_LOG_FEATURES_START, 0.1),
+            np.full(creature_stats.PRIVATE_LOG_FEATURES_END - creature_stats.PRIVATE_LOG_FEATURES_START, 0.2),
             np.ones(creature_stats.PRIVATE_MASS_FRACTION_FEATURES_END - creature_stats.PRIVATE_MASS_FRACTION_FEATURES_START),
             np.ones(creature_stats.PRIVATE_MAX_HP_FRACTION_FEATURES_END - creature_stats.PRIVATE_MAX_HP_FRACTION_FEATURES_START),
             np.ones(creature_stats.PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END - creature_stats.PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START),
@@ -75,8 +78,8 @@ class Genome:
         self.self_feature_biases = np.zeros_like(self.self_feature_coefficients)
 
         self.perception_feature_coefficients = np.array([[[
-            0.1, # food
-            0.1, # mass
+            0.2, # food
+            0.2, # mass
             1.0, # damage / max hp
         ]]])
 
@@ -97,12 +100,14 @@ class Genome:
             self.network,
         )
 
+    @timer_decorator('Genome.feature_coefficients')
     def feature_coefficients(self) -> np.ndarray:
         return np.concatenate([
             self.self_feature_coefficients,
             self.perception_feature_coefficients.flatten(),
         ])
     
+    @timer_decorator('Genome.feature_biases')
     def feature_biases(self) -> np.ndarray:
         return np.concatenate([
             self.self_feature_biases,
@@ -115,6 +120,7 @@ class Genome:
     _BRAIN_MASS_PER_FLOAT = 0.0001
     _BRAIN_MASS_PER_VISION_RADIUS_CUBED = 0.0 # TODO: penalize larger vision radii once it's evolvable
     
+    @timer_decorator('Genome.brain_mass')
     def brain_mass(self) -> np.float64:
         float_count = self.feature_coefficients().size + self.feature_biases().size
         for weights, biases in zip(self.network.weights, self.network.biases):
