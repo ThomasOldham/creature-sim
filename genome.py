@@ -112,6 +112,17 @@ class Genome:
     def num_features(self) -> int:
         return self.self_feature_coefficients.size + self.perception_feature_coefficients.size
     
+    _BRAIN_MASS_PER_FLOAT = 0.0001
+    _BRAIN_MASS_PER_VISION_RADIUS_CUBED = 0.0 # TODO: penalize larger vision radii once it's evolvable
+    
+    def brain_mass(self) -> np.float64:
+        float_count = self.feature_coefficients().size + self.feature_biases().size
+        for weights, biases in zip(self.network.weights, self.network.biases):
+            float_count += weights.size + biases.size
+        network_contribution = self._BRAIN_MASS_PER_FLOAT * float_count
+        vision_contribution = self.vision_radius ** 3 * self._BRAIN_MASS_PER_VISION_RADIUS_CUBED
+        return network_contribution + vision_contribution
+    
     def mutate(self) -> None:
         self._mutate_network_architecture()
         # self._mutate_vision() # TODO: temporary universal fixed vision radius

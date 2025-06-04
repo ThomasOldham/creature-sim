@@ -30,7 +30,7 @@ PUBLIC_LOG_FEATURES_END = 12
 
 # Private stats that need x/mass transformation
 PRIVATE_MASS_FRACTION_FEATURES_START = 12
-MIN_MASS = 12
+MIN_MASS = 12 # recalculated at the start of each round
 LAST_COST = 13
 PRIVATE_MASS_FRACTION_FEATURES_END = 14
 

@@ -30,8 +30,10 @@ class Board:
         self._max_vision = max(self._max_vision, genome.vision_radius)
         index = self.creature_storage.allocate(genome.vision_radius)
         self.creature_storage.stats[index] = creature_stats.INITIAL_STATS
+        self.creature_storage.stats[index, creature_stats.BRAIN_MASS] = genome.brain_mass()
         self.creature_storage.param_coefficients[index] = genome.param_coefficients
         self.creature_storage.genome[index] = genome
+        self.creature_storage.network[index] = genome.network
         self.creature_storage.is_alive[index] = True
         feature_storage = self.creature_storage.features_storages[genome.vision_radius]
         features_index = self.creature_storage.features_index[index]
@@ -44,6 +46,7 @@ class Board:
         self._decay_food_rates()
         self._add_food()
         self._abiogenesis()
+        creature.recalculate_min_mass(self.creature_storage)
     
     def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
         creature_storage = self.creature_storage
@@ -52,7 +55,8 @@ class Board:
         all_private_features = creature.private_features(creature_storage)
         all_cell_features = self._get_cell_features()
         for vision_radius in range(self._max_vision):
-            self._all_features_for_vision_radius(vision_radius, all_private_features, all_cell_features, outs[vision_radius])
+            self._untransformed_features_for_vision_radius(vision_radius, all_private_features, all_cell_features, outs[vision_radius])
+        creature.transform_features(outs, creature_storage)
         return outs
     
     def _add_food_rate_spikes(self) -> None:
@@ -76,6 +80,8 @@ class Board:
             index = self.add_creature(Genome.random())
             self.creatures[y, x] = index
             self.food[y, x] -= self._ABIOGENESIS_THRESHOLD
+            self.creature_storage.grid_position[index] = np.array([x, y], dtype=np.int64)
+            self.creature_storage.stats[index, creature_stats.MASS] = self._ABIOGENESIS_THRESHOLD
     
     def _get_cell_features(self) -> np.ndarray:
         if self._cell_features_padding < self._max_vision:
@@ -94,7 +100,7 @@ class Board:
         np.where(creature_present, indexed_features[out], creature.DEFAULT_PUBLIC_FEATURES, out=out)
         return out
     
-    def _all_features_for_vision_radius(self, vision_radius: int, all_private_features: np.ndarray, all_cell_features: np.ndarray, out: np.ndarray) -> None:
+    def _untransformed_features_for_vision_radius(self, vision_radius: int, all_private_features: np.ndarray, all_cell_features: np.ndarray, out: np.ndarray) -> None:
         creature_storage = self.creature_storage
         features_storage = creature_storage.features_storages[vision_radius]
         # TODO: Actually supporting multiple vision radii is hard, so use just one radius and
@@ -121,7 +127,3 @@ class Board:
         perception_squares = all_cell_features[perceived_y, perceived_x]
         perception_features = perception_squares.reshape(len(grid_x), -1)
         out[creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
-
-        # apply coefficients and biases
-        np.multiply(out, features_storage.feature_coefficients, out=out)
-        np.add(out, features_storage.feature_biases, out=out)
