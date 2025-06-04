@@ -27,6 +27,8 @@ _PRIVATE_LAST_DAMAGE_FRACTION_FEATURE_RANGE_END = _PRIVATE_MAX_HP_FRACTION_FEATU
 def private_features(creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), NUM_PRIVATE_FEATURES), dtype=np.float64)
+    if not out.size:
+        return out
     linear_features = out[:, :_PRIVATE_LINEAR_FEATURE_RANGE_END]
     linear_features[:] = creature_storage.stats[:, PRIVATE_LINEAR_FEATURES_START:PRIVATE_LINEAR_FEATURES_END]
     log_features = out[:, _PRIVATE_LINEAR_FEATURE_RANGE_END:_PRIVATE_LOG_FEATURE_RANGE_END]
@@ -37,7 +39,9 @@ def private_features(creature_storage: CreatureStorage, out: Optional[np.ndarray
     max_hp_fraction_features = out[:, _PRIVATE_MASS_FRACTION_FEATURE_RANGE_END:_PRIVATE_MAX_HP_FRACTION_FEATURE_RANGE_END]
     np.divide(creature_storage.stats[:, PRIVATE_MAX_HP_FRACTION_FEATURES_START:PRIVATE_MAX_HP_FRACTION_FEATURES_END], creature_storage.stats[:, MAX_HP], out=max_hp_fraction_features)
     last_damage_fraction_features = out[:, _PRIVATE_MAX_HP_FRACTION_FEATURE_RANGE_END:_PRIVATE_LAST_DAMAGE_FRACTION_FEATURE_RANGE_END]
-    np.divide(creature_storage.stats[:, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START:PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END], creature_storage.stats[:, LAST_DAMAGE_RECEIVED], out=last_damage_fraction_features)
+    last_damage = creature_storage.stats[:, LAST_DAMAGE_RECEIVED]
+    last_damage[last_damage == 0.0] = 1.0
+    np.divide(creature_storage.stats[:, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START:PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END], last_damage, out=last_damage_fraction_features)
     return out
 
 _PUBLIC_LOG_FEATURE_RANGE_END = PUBLIC_LOG_FEATURES_END-PUBLIC_LOG_FEATURES_START
@@ -47,6 +51,8 @@ _PUBLIC_MAX_HP_FRACTION_FEATURE_RANGE_END = _PUBLIC_LOG_FEATURE_RANGE_END + PUBL
 def public_features(creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), NUM_PUBLIC_FEATURES), dtype=np.float64)
+    if not out.size:
+        return out
     log_features = out[:, :_PUBLIC_LOG_FEATURE_RANGE_END]
     np.add(creature_storage.stats[:, PUBLIC_LOG_FEATURES_START:PUBLIC_LOG_FEATURES_END], 1.0, out=log_features)
     np.log10(log_features, out=log_features)
@@ -73,6 +79,8 @@ def decide_action_kind(network_outputs: np.ndarray) -> np.ndarray:
 def action_params(network_outputs: np.ndarray, creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
         out = np.empty((creature_storage.used_row_count(), PARAMS_COUNT), dtype=np.float64)
+    if not out.size:
+        return out
     raw_params = network_outputs[:, ACTION_KINDS_COUNT:]
 
     # Snapped directions

@@ -3,7 +3,6 @@ from typing import Optional
 from execution_timer import timer_decorator
 
 class NeuralNetwork:
-    @timer_decorator('NeuralNetwork.__init__')
     def __init__(self, layer_sizes: list[int], constant_value: Optional[float] = None):
         """Initialize a neural network with the given layer sizes.
         
@@ -27,7 +26,7 @@ class NeuralNetwork:
                 self.biases.append(np.full(layer_sizes[i + 1], constant_value, dtype=np.float64))
             else:
                 # Uniform random initialization between -1 and 1
-                self.weights.append(np.random.uniform(-1, 1, (layer_sizes[i + 1], layer_sizes[i]), dtype=np.float64))
+                self.weights.append(np.random.uniform(-1, 1, (layer_sizes[i + 1], layer_sizes[i])))
                 self.biases.append(np.zeros(layer_sizes[i + 1], dtype=np.float64))
             
     def relu(self, x: np.ndarray) -> np.ndarray:
@@ -158,7 +157,7 @@ class NeuralNetwork:
         Args:
             layer_idx: Index to insert the new layer (between 1 and len(layer_sizes)-1).
                         The new layer will be inserted before the layer at this index.
-            constant_value: If provided, initialize new weights and biases to this value.
+            constant_value: If provided, initialize new weights and biases to this value (instead of identity matrix).
                           Otherwise, use identity matrix for weights and zeros for biases.
         Raises:
             ValueError: If layer_idx is not a valid position for a hidden layer.

@@ -31,7 +31,7 @@ class Board:
     def add_creature(self, genome: Genome) -> int:
         self._max_vision = max(self._max_vision, genome.vision_radius)
         index = self.creature_storage.allocate(genome.vision_radius)
-        self.creature_storage.stats[index] = creature_stats.INITIAL_STATS
+        self.creature_storage.stats[index] = creature_stats.STARTING_VALUES
         self.creature_storage.stats[index, creature_stats.BRAIN_MASS] = genome.brain_mass()
         self.creature_storage.param_coefficients[index] = genome.param_coefficients
         self.creature_storage.genome[index] = genome
@@ -140,10 +140,10 @@ class Board:
         
         # self features
         self_features = all_private_features
-        out[:creature_stats.NUM_PRIVATE_FEATURES] = self_features
+        out[:, :creature_stats.NUM_PRIVATE_FEATURES] = self_features
 
         # perception features
-        creature_coords = creature_storage.grid_position[creature_storage.used_row_count()]
+        creature_coords = creature_storage.grid_position
         grid_x = creature_coords[:, 0]
         grid_y = creature_coords[:, 1]
         vision_length = 2*vision_radius+1
@@ -155,7 +155,7 @@ class Board:
         perceived_y += grid_y[:, np.newaxis, np.newaxis]
         perception_squares = all_cell_features[perceived_y, perceived_x]
         perception_features = perception_squares.reshape(len(grid_x), -1)
-        out[creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
+        out[:, creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
     
     @timer_decorator('Board._apply_bmr')
     def _apply_bmr(self) -> None:

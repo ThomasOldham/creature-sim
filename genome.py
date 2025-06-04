@@ -66,7 +66,7 @@ class Genome:
 
     @timer_decorator('Genome.__init__')
     def __init__(self):
-        self.vision_radius = 3 # TODO: temporary universal fixed vision radius
+        self.vision_radius = 0
 
         self.self_feature_coefficients = np.concatenate([
             np.ones(creature_stats.PRIVATE_LINEAR_FEATURES_END - creature_stats.PRIVATE_LINEAR_FEATURES_START),
@@ -192,11 +192,10 @@ class Genome:
     
     def _mutate_vision(self) -> None:
         if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_GAIN_VISION]:
-            self.vision_radius += 1
+            self._increment_vision_radius()
         if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_LOSE_VISION]:
-            self.vision_radius -= 1
-        if self.vision_radius < 0:
-            self.vision_radius = 0
+            if self.vision_radius > 0:
+                self._decrement_vision_radius()
 
     def _mutate_real(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.ndarray, max_value: np.ndarray) -> None:
         proportional_noise = np.random.normal(0, self._PROPORTIONAL_NOISE_SCALE, values.shape)
@@ -228,6 +227,17 @@ class Genome:
         x1, x2 = inverse_indel_suppression_tax_curve(tax_values)
         values[smaller_answer] = x1[smaller_answer]
         values[~smaller_answer] = x2[~smaller_answer]
+    
+    def _increment_vision_radius(self) -> None:
+        pass
+
+    def _decrement_vision_radius(self) -> None:
+        self.vision_radius -= 1
+        self.perception_feature_coefficients = self.perception_feature_coefficients[1:-1, 1:-1, :]
+        self.perception_feature_biases = self.perception_feature_biases[1:-1, 1:-1]
+        self.mutation_control.perception_feature_coeff_mutsup = self.mutation_control.perception_feature_coeff_mutsup[1:-1, 1:-1]
+        self.mutation_control.perception_feature_bias_mutsup = self.mutation_control.perception_feature_bias_mutsup[1:-1, 1:-1]
+        # TODO: prune the corresponding neurons from the input layer of the network
 
 LARGE_INSERT_SUPPRESSION_TAX_BASE = 1.001
 SMALL_INSERT_SUPPRESSION_TAX_BASE = 1.01

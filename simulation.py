@@ -44,7 +44,9 @@ class Simulation:
         for index in range(creature_storage.used_row_count()):
             if not creature_storage.is_alive[index]:
                 continue
-            creature_storage.network[index].forward(inputs[index], out[index])
+            vision_radius = creature_storage.vision_radius[index]
+            features_index = creature_storage.features_index[index]
+            out[index] = creature_storage.network[index].forward(inputs[vision_radius][features_index])
         return out
     
     @timer_decorator('Simulation._execute_actions')
@@ -71,7 +73,7 @@ class Simulation:
     @timer_decorator('Simulation._apply_action_results')
     def _apply_action_results(self, action_results: np.ndarray) -> None:
         creature_storage = self.board.creature_storage
-        stats = creature_storage.stats[:creature_storage.used_row_count()]
+        stats = creature_storage.stats
         np.subtract(stats[:, creature_stats.MASS], action_results[:, action.RESULT_COST], out=stats[:, creature_stats.MASS])
         stats[:, creature_stats.LAST_SUCCESS] = action_results[:, action.RESULT_SUCCESS]
         stats[:, creature_stats.LAST_COST] = action_results[:, action.RESULT_COST]
