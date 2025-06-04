@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 from creature_storage import CreatureStorage
 from creature_stats import BRAIN_MASS, LAST_DAMAGE_DX_SUM, LAST_DAMAGE_DY_SUM, LAST_DAMAGE_RECEIVED, MASS, MAX_HP, MIN_MASS, NUM_PRIVATE_FEATURES, NUM_PUBLIC_FEATURES, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_END, PRIVATE_LAST_DAMAGE_FRACTION_FEATURES_START, PRIVATE_LINEAR_FEATURES_END, PRIVATE_LINEAR_FEATURES_START, PRIVATE_LOG_FEATURES_END, PRIVATE_LOG_FEATURES_START, PRIVATE_MASS_FRACTION_FEATURES_END, PRIVATE_MASS_FRACTION_FEATURES_START, PRIVATE_MAX_HP_FRACTION_FEATURES_END, PRIVATE_MAX_HP_FRACTION_FEATURES_START, PUBLIC_LOG_FEATURES_END, PUBLIC_LOG_FEATURES_START, PUBLIC_MAX_HP_FRACTION_FEATURES_END, PUBLIC_MAX_HP_FRACTION_FEATURES_START, UPGRADEABLE_STAT_MASS_CONTRIBUTIONS, UPGRADEABLE_STATS_END, UPGRADEABLE_STATS_START
-from network_outputs import ACTION_KINDS_COUNT, PARAMS_MASS_FRACTIONS_END, PARAMS_MASS_FRACTIONS_START, PARAMS_SNAP_DIR_X_END, PARAMS_SNAP_DIR_X_START, PARAMS_SNAP_DIR_Y_END, PARAMS_SNAP_DIR_Y_START, PARAMS_TANH_END, PARAMS_TANH_START
+from network_outputs import ACTION_KINDS_COUNT, PARAMS_COUNT, PARAMS_MASS_FRACTIONS_END, PARAMS_MASS_FRACTIONS_START, PARAMS_SNAP_DIR_X_END, PARAMS_SNAP_DIR_X_START, PARAMS_SNAP_DIR_Y_END, PARAMS_SNAP_DIR_Y_START, PARAMS_TANH_END, PARAMS_TANH_START
 import numpy as np
 from execution_timer import timer_decorator
 
@@ -72,7 +72,7 @@ def decide_action_kind(network_outputs: np.ndarray) -> np.ndarray:
 @timer_decorator('creature.action_params')
 def action_params(network_outputs: np.ndarray, creature_storage: CreatureStorage, out: Optional[np.ndarray] = None) -> np.ndarray:
     if out is None:
-        out = np.empty((creature_storage.used_row_count(), network_outputs.PARAMS_COUNT), dtype=np.float64)
+        out = np.empty((creature_storage.used_row_count(), PARAMS_COUNT), dtype=np.float64)
     raw_params = network_outputs[:, ACTION_KINDS_COUNT:]
 
     # Snapped directions

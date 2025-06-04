@@ -12,35 +12,41 @@ RESULT_DIR_X = 3
 RESULT_DIR_Y = 4
 RESULT_SIZE = 5
 
+# TODO
 @timer_decorator('action.attack_action')
 def attack_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                    board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
+# TODO
 @timer_decorator('action.eat_action')
 def eat_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
+# TODO
 @timer_decorator('action.heal_action')
 def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                 board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
+# TODO
 @timer_decorator('action.upgrade_action')
 def upgrade_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                    board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
+# TODO
 @timer_decorator('action.move_action')
 def move_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                 board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
+# TODO
 @timer_decorator('action.reproduce_action')
 def reproduce_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                      board: Board, out: Optional[np.ndarray] = None) -> np.ndarray:
-    pass # TODO
+    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
 
 ACTION_FUNCTIONS = [
     attack_action,

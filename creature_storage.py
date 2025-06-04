@@ -34,7 +34,7 @@ class CreatureStorage:
         # Vision radius tracking
         self.vision_radius = np.full(1, -1, dtype=np.int64)
         self.features_index = np.full(1, -1, dtype=np.int64)
-        self.features_storages = []
+        self.features_storages = [InputTransformStorage(0), InputTransformStorage(1)]
         
     @timer_decorator('CreatureStorage.allocate')
     def allocate(self, vision_radius: int) -> int:

@@ -1,3 +1,4 @@
+from typing import Tuple
 import numpy as np
 from neural_network import NeuralNetwork
 import copy
@@ -197,7 +198,7 @@ class Genome:
         if self.vision_radius < 0:
             self.vision_radius = 0
 
-    def _mutate_real(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.array_like, max_value: np.array_like) -> None:
+    def _mutate_real(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.ndarray, max_value: np.ndarray) -> None:
         proportional_noise = np.random.normal(0, self._PROPORTIONAL_NOISE_SCALE, values.shape)
         np.multiply(proportional_noise, values, out=proportional_noise)
         linear_noise = np.random.normal(0, self._LINEAR_NOISE_SCALE, values.shape)
@@ -209,7 +210,7 @@ class Genome:
             warnings.warn(f"Real values exceeded reasonable bounds, clipping to [{min_value}, {max_value}]")
             values.clip(min_value, max_value, out=values)
 
-    def _mutate_positive(self, values: np.ndarray, mutsup: np.array_like, min_value: np.array_like, max_value: np.array_like) -> None:
+    def _mutate_positive(self, values: np.ndarray, mutsup: np.ndarray, min_value: np.ndarray, max_value: np.ndarray) -> None:
         noise = np.random.normal(0, self._EXPONENTIAL_NOISE_SCALE, values.shape)
         np.divide(noise, mutsup, out=noise)
         np.exp(noise, out=values)
@@ -217,7 +218,7 @@ class Genome:
             warnings.warn(f"Positive values exceeded reasonable bounds, clipping to [{min_value}, {max_value}]")
             values.clip(min_value, max_value, out=values)
     
-    def _mutate_interval(self, values: np.ndarray, mutsup: np.array_like) -> None:
+    def _mutate_interval(self, values: np.ndarray, mutsup: np.ndarray) -> None:
         smaller_answer = values < 0.5
         tax_values = indel_suppression_tax_curve(values)
         self._mutate_real(tax_values, mutsup, 0, 1)
@@ -237,7 +238,7 @@ _INDEL_CHANCE_FOR_GEO_MEAN_TAX = 0.1
 INDEL_TAX_CURVE_CONSTANT = _INDEL_CHANCE_FOR_GEO_MEAN_TAX * (1.0 - _INDEL_CHANCE_FOR_GEO_MEAN_TAX) / \
     ((_INDEL_CHANCE_FOR_GEO_MEAN_TAX - 0.5) ** 2)
 
-def indel_suppression_tax_curve(x: np.array_like) -> np.array_like:
+def indel_suppression_tax_curve(x: np.ndarray) -> np.ndarray:
     """Calculate the indel suppression tax curve value.
     
     Args:
@@ -248,7 +249,7 @@ def indel_suppression_tax_curve(x: np.array_like) -> np.array_like:
     """
     return INDEL_TAX_CURVE_CONSTANT * ((x - 0.5) ** 2) / (x * (1.0 - x))
 
-def inverse_indel_suppression_tax_curve(y: np.array_like) -> tuple[np.array_like, np.array_like]:
+def inverse_indel_suppression_tax_curve(y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Calculate the inverse of the indel suppression tax curve.
     
     Args:

@@ -71,9 +71,10 @@ class Simulation:
     @timer_decorator('Simulation._apply_action_results')
     def _apply_action_results(self, action_results: np.ndarray) -> None:
         creature_storage = self.board.creature_storage
-        np.subtract(creature_storage.stats[:, creature_stats.MASS], action_results[:, action.RESULT_COST], out=creature_storage.stats[:, creature_stats.MASS])
-        creature_storage.stats[:, creature_stats.LAST_SUCCESS] = action_results[:, action.RESULT_SUCCESS]
-        creature_storage.stats[:, creature_stats.LAST_COST] = action_results[:, action.RESULT_COST]
-        creature_storage.stats[:, creature_stats.LAST_ACTION] = action_results[:, action.RESULT_KIND]
-        creature_storage.stats[:, creature_stats.LAST_DX] = action_results[:, action.RESULT_DIR_X]
-        creature_storage.stats[:, creature_stats.LAST_DY] = action_results[:, action.RESULT_DIR_Y]
+        stats = creature_storage.stats[:creature_storage.used_row_count()]
+        np.subtract(stats[:, creature_stats.MASS], action_results[:, action.RESULT_COST], out=stats[:, creature_stats.MASS])
+        stats[:, creature_stats.LAST_SUCCESS] = action_results[:, action.RESULT_SUCCESS]
+        stats[:, creature_stats.LAST_COST] = action_results[:, action.RESULT_COST]
+        stats[:, creature_stats.LAST_ACTION] = action_results[:, action.RESULT_KIND]
+        stats[:, creature_stats.LAST_DX] = action_results[:, action.RESULT_DIR_X]
+        stats[:, creature_stats.LAST_DY] = action_results[:, action.RESULT_DIR_Y]
