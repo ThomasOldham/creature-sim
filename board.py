@@ -48,6 +48,19 @@ class Board:
         self._abiogenesis()
         creature.recalculate_min_mass(self.creature_storage)
     
+    def wrapup_round(self) -> None:
+        self._apply_bmr()
+        self._apply_starvation()
+
+    def apply_death(self, dead_creature_indices: np.ndarray) -> None:
+        self.creature_storage.is_alive[dead_creature_indices] = False
+        dead_positions = self.creature_storage.grid_position[dead_creature_indices]
+        dead_masses = np.maximum(self.creature_storage.stats[:, creature_stats.MIN_MASS],
+                                  self.creature_storage.stats[:, creature_stats.MASS])
+        self.food[dead_positions[:, 1], dead_positions[:, 0]] += dead_masses
+        self.creatures[dead_positions[:, 1], dead_positions[:, 0]] = -1
+        self.creature_storage.is_alive[dead_creature_indices] = False
+    
     def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
         creature_storage = self.creature_storage
         if not outs:
@@ -127,3 +140,12 @@ class Board:
         perception_squares = all_cell_features[perceived_y, perceived_x]
         perception_features = perception_squares.reshape(len(grid_x), -1)
         out[creature_stats.NUM_PRIVATE_FEATURES:] = perception_features
+    
+    def _apply_bmr(self) -> None:
+        bmr = self.creature_storage.stats[:, creature_stats.MASS] + self.creature_storage.stats[:, creature_stats.MIN_MASS]
+        np.divide(bmr, 2000.0, out=bmr)
+        np.subtract(self.creature_storage.stats[:, creature_stats.MASS], bmr, out=self.creature_storage.stats[:, creature_stats.MASS])
+
+    def _apply_starvation(self) -> None:
+        starved_mask = self.creature_storage.stats[:, creature_stats.MASS] < self.creature_storage.stats[:, creature_stats.MIN_MASS]
+        self.apply_death(np.where(starved_mask))

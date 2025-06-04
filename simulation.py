@@ -1,8 +1,11 @@
 from typing import Optional, Tuple
+import action
 from board import Board
 import numpy as np
+from action import ACTION_FUNCTIONS
 
 import creature
+import creature_stats
 import network_outputs
 
 class Simulation:
@@ -14,15 +17,15 @@ class Simulation:
     def run_round(self) -> None:
         self.board.setup_round()
         self._creature_turns()
+        self.board.wrapup_round()
     
     def _creature_turns(self) -> None:
-        action_kinds, action_params = self._creature_decisions()
-        action_kind_masks = [
-            self.board.creature_storage.is_alive & (action_kinds == kind)
-            for kind in range(network_outputs.ACTION_KINDS_COUNT)
-        ]
+        action_kinds, action_params = self._decide_actions()
+        creature.reset_short_term_memory(self.board.creature_storage)
+        action_results = self._execute_actions(action_kinds, action_params)
+        self._apply_action_results(action_results)
 
-    def _creature_decisions(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _decide_actions(self) -> Tuple[np.ndarray, np.ndarray]:
         outputs = self._get_outputs()
         action_kinds = creature.decide_action_kind(outputs)
         action_params = creature.action_params(outputs, self.board.creature_storage)
@@ -38,3 +41,25 @@ class Simulation:
                 continue
             creature_storage.network[index].forward(inputs[index], out[index])
         return out
+    
+    def _execute_actions(self, action_kinds: np.ndarray, action_params: np.ndarray, out: Optional[np.ndarray] = None) -> np.ndarray:
+        if not out:
+            out = np.empty((len(action_kinds), action.RESULT_SIZE), dtype=np.float64)
+        action_kind_masks = [
+            self.board.creature_storage.is_alive & (action_kinds == kind)
+            for kind in range(network_outputs.ACTION_KINDS_COUNT)
+        ]
+        for kind, mask in enumerate(action_kind_masks):
+            if not mask.any():
+                continue
+            ACTION_FUNCTIONS[kind](mask, action_params, self.board.creature_storage, self.board, out=out)
+        return out
+    
+    def _apply_action_results(self, action_results: np.ndarray) -> None:
+        creature_storage = self.board.creature_storage
+        np.subtract(creature_storage.stats[:, creature_stats.MASS], action_results[:, action.RESULT_COST], out=creature_storage.stats[:, creature_stats.MASS])
+        creature_storage.stats[:, creature_stats.LAST_SUCCESS] = action_results[:, action.RESULT_SUCCESS]
+        creature_storage.stats[:, creature_stats.LAST_COST] = action_results[:, action.RESULT_COST]
+        creature_storage.stats[:, creature_stats.LAST_ACTION] = action_results[:, action.RESULT_KIND]
+        creature_storage.stats[:, creature_stats.LAST_DX] = action_results[:, action.RESULT_DIR_X]
+        creature_storage.stats[:, creature_stats.LAST_DY] = action_results[:, action.RESULT_DIR_Y]
