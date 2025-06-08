@@ -67,7 +67,7 @@ class Simulation:
         for kind, mask in enumerate(action_kind_masks):
             if not mask.any():
                 continue
-            ACTION_FUNCTIONS[kind](mask, action_params, self.board.creature_storage, self.board, out=out)
+            ACTION_FUNCTIONS[kind](mask, action_params, self.board.creature_storage, self.board, out)
         return out
     
     @timer_decorator('Simulation._apply_action_results')
