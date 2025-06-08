@@ -1,7 +1,7 @@
 from typing import Tuple
 import numpy as np
 from neural_network import NeuralNetwork
-import copy
+import cell_stats
 import creature_stats
 import warnings
 import network_outputs
@@ -100,6 +100,10 @@ class Genome:
             self.param_coefficients,
             self.network,
         )
+
+        self._increment_vision_radius()
+        self._increment_vision_radius()
+        self._increment_vision_radius()
 
     @timer_decorator('Genome.feature_coefficients')
     def feature_coefficients(self) -> np.ndarray:
@@ -229,15 +233,132 @@ class Genome:
         values[~smaller_answer] = x2[~smaller_answer]
     
     def _increment_vision_radius(self) -> None:
-        pass
+        """Increment the vision radius by adding a new outer layer of vision cells."""
+        old_vision_length = 2 * self.vision_radius + 1
+        new_vision_length = old_vision_length + 2
+        
+        # Create new arrays with the new size
+        new_coeffs = np.zeros((new_vision_length, new_vision_length, cell_stats.NUM_FEATURES))
+        new_biases = np.zeros((new_vision_length, new_vision_length, cell_stats.NUM_FEATURES))
+        new_coeff_mutsup = np.full((new_vision_length, new_vision_length, cell_stats.NUM_FEATURES), self.mutation_control.average_mutsup)
+        new_bias_mutsup = np.full((new_vision_length, new_vision_length, cell_stats.NUM_FEATURES), self.mutation_control.average_mutsup)
+        
+        # Copy existing values to the center
+        new_coeffs[1:-1, 1:-1, :] = self.perception_feature_coefficients
+        new_biases[1:-1, 1:-1, :] = self.perception_feature_biases
+        new_coeff_mutsup[1:-1, 1:-1, :] = self.mutation_control.perception_feature_coeff_mutsup
+        new_bias_mutsup[1:-1, 1:-1, :] = self.mutation_control.perception_feature_bias_mutsup
+        
+        # For each feature channel, set the new outer layer values to the average of existing values
+        for channel in range(cell_stats.NUM_FEATURES):
+            avg_coeff = np.mean(self.perception_feature_coefficients[:, :, channel])
+            avg_bias = np.mean(self.perception_feature_biases[:, :, channel])
+            
+            # Set top and bottom rows
+            new_coeffs[0, :, channel] = avg_coeff
+            new_coeffs[-1, :, channel] = avg_coeff
+            new_biases[0, :, channel] = avg_bias
+            new_biases[-1, :, channel] = avg_bias
+            
+            # Set left and right columns (excluding corners which are already set)
+            new_coeffs[1:-1, 0, channel] = avg_coeff
+            new_coeffs[1:-1, -1, channel] = avg_coeff
+            new_biases[1:-1, 0, channel] = avg_bias
+            new_biases[1:-1, -1, channel] = avg_bias
+        
+        # Update the arrays
+        self.perception_feature_coefficients = new_coeffs
+        self.perception_feature_biases = new_biases
+        self.mutation_control.perception_feature_coeff_mutsup = new_coeff_mutsup
+        self.mutation_control.perception_feature_bias_mutsup = new_bias_mutsup
+        
+        # Calculate indices where new features should be inserted
+        # Features are ordered: [self_features, perception_features]
+        # Perception features are ordered row by row in memory
+        self_feature_count = creature_stats.NUM_PRIVATE_FEATURES
+        features_per_cell = cell_stats.NUM_FEATURES
+        
+        # Calculate indices for new features
+        # Top row
+        top_row_start = self_feature_count
+        top_row_indices = list(range(top_row_start, top_row_start + new_vision_length * features_per_cell))
+        
+        # Bottom row
+        bottom_row_start = top_row_start + (new_vision_length - 1) * new_vision_length * features_per_cell
+        bottom_row_indices = list(range(bottom_row_start, bottom_row_start + new_vision_length * features_per_cell))
+        
+        # Left and right columns (excluding corners which are already included)
+        left_col_indices = []
+        right_col_indices = []
+        for row in range(1, new_vision_length - 1):
+            left_col_start = top_row_start + (row * new_vision_length * features_per_cell)
+            left_col_indices.extend(range(left_col_start, left_col_start + features_per_cell))
+            right_col_start = left_col_start + (new_vision_length - 1) * features_per_cell
+            right_col_indices.extend(range(right_col_start, right_col_start + features_per_cell))
+        
+        # Combine all indices to insert
+        indices_to_insert = sorted(
+            top_row_indices +  # top row
+            bottom_row_indices +  # bottom row
+            left_col_indices +  # left column
+            right_col_indices,  # right column
+        )
+        
+        # Add neurons to network input layer
+        for idx in indices_to_insert:
+            self.network.insert_neuron(0, idx)
+            self.mutation_control.network_mutsup.insert_neuron(0, idx, constant_value=self.mutation_control.average_mutsup)
+        
+        self.vision_radius += 1
 
     def _decrement_vision_radius(self) -> None:
+        """Decrement the vision radius by removing the outermost layer of vision cells."""
         self.vision_radius -= 1
+        
+        # Remove outer rows and columns from perception features
         self.perception_feature_coefficients = self.perception_feature_coefficients[1:-1, 1:-1, :]
-        self.perception_feature_biases = self.perception_feature_biases[1:-1, 1:-1]
-        self.mutation_control.perception_feature_coeff_mutsup = self.mutation_control.perception_feature_coeff_mutsup[1:-1, 1:-1]
-        self.mutation_control.perception_feature_bias_mutsup = self.mutation_control.perception_feature_bias_mutsup[1:-1, 1:-1]
-        # TODO: prune the corresponding neurons from the input layer of the network
+        self.perception_feature_biases = self.perception_feature_biases[1:-1, 1:-1, :]
+        self.mutation_control.perception_feature_coeff_mutsup = self.mutation_control.perception_feature_coeff_mutsup[1:-1, 1:-1, :]
+        self.mutation_control.perception_feature_bias_mutsup = self.mutation_control.perception_feature_bias_mutsup[1:-1, 1:-1, :]
+        
+        # Calculate number of features to prune from network input layer
+        features_per_cell = cell_stats.NUM_FEATURES
+        old_vision_length = 2 * (self.vision_radius + 1) + 1
+        
+        # Calculate indices of features to remove
+        # Features are ordered: [self_features, perception_features]
+        # Perception features are ordered row by row in memory
+        self_feature_count = creature_stats.NUM_PRIVATE_FEATURES
+        
+        # Calculate indices of features to remove
+        # Remove top row
+        top_row_start = self_feature_count
+        top_row_end = top_row_start + old_vision_length * features_per_cell
+        # Remove bottom row
+        bottom_row_start = top_row_start + (old_vision_length - 1) * old_vision_length * features_per_cell
+        bottom_row_end = bottom_row_start + old_vision_length * features_per_cell
+        # Remove left and right columns (excluding corners which are already removed)
+        left_col_indices = []
+        right_col_indices = []
+        for row in range(1, old_vision_length - 1):
+            left_col_start = top_row_start + row * old_vision_length * features_per_cell
+            left_col_indices.extend(range(left_col_start, left_col_start + features_per_cell))
+            right_col_start = left_col_start + (old_vision_length - 1) * features_per_cell
+            right_col_indices.extend(range(right_col_start, right_col_start + features_per_cell))
+        
+        # Combine all indices to remove, in reverse order to avoid index shifting
+        indices_to_remove = sorted(
+            list(range(top_row_start, top_row_end)) +  # top row
+            list(range(bottom_row_start, bottom_row_end)) +  # bottom row
+            left_col_indices +  # left column
+            right_col_indices,  # right column
+            reverse=True  # remove from end to avoid index shifting
+        )
+        
+        # Prune neurons from network input layer
+        for idx in indices_to_remove:
+            self.network.prune_neuron(0, idx)
+            self.mutation_control.network_mutsup.prune_neuron(0, idx)
 
 LARGE_INSERT_SUPPRESSION_TAX_BASE = 1.001
 SMALL_INSERT_SUPPRESSION_TAX_BASE = 1.01

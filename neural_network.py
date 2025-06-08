@@ -1,4 +1,5 @@
 import numpy as np
+from copy import copy
 from typing import Optional
 from execution_timer import timer_decorator
 
@@ -15,7 +16,7 @@ class NeuralNetwork:
         if len(layer_sizes) < 2:
             raise ValueError("Network must have at least input and output layers")
             
-        self.layer_sizes = layer_sizes
+        self.layer_sizes = copy(layer_sizes)
         self.weights = []
         self.biases = []
         
@@ -87,21 +88,21 @@ class NeuralNetwork:
         return "\n".join(lines)
 
     def insert_neuron(self, layer_idx: int, neuron_idx: Optional[int] = None, constant_value: Optional[float] = None) -> None:
-        """Insert a new neuron into a hidden layer while preserving network behavior.
+        """Insert a new neuron into a layer while preserving network behavior.
         
         Args:
-            layer_idx: Index of the hidden layer to insert the neuron into (0-based)
+            layer_idx: Index of the layer to insert the neuron into (0-based)
             neuron_idx: Index within the layer where to insert the neuron (0-based).
                        If None, appends to the end of the layer.
             constant_value: If provided, initialize new weights and biases to this value.
                           Otherwise, use zeros.
             
         Raises:
-            ValueError: If layer_idx is invalid (must be a hidden layer)
+            ValueError: If layer_idx is invalid (must be input or hidden layer)
             ValueError: If neuron_idx is out of bounds
         """
-        if layer_idx <= 0 or layer_idx >= len(self.layer_sizes) - 1:
-            raise ValueError("Can only insert neurons into hidden layers")
+        if layer_idx < 0 or layer_idx >= len(self.layer_sizes) - 1:
+            raise ValueError("Can only insert neurons into input or hidden layers")
             
         # If neuron_idx is None, append to the end
         if neuron_idx is None:
@@ -114,42 +115,63 @@ class NeuralNetwork:
         # Update layer sizes
         self.layer_sizes[layer_idx] += 1
         
-        # Get the current weights and biases for the layer
-        current_weights = self.weights[layer_idx - 1]  # Weights into this layer
-        current_biases = self.biases[layer_idx - 1]    # Biases into this layer
-        next_weights = self.weights[layer_idx]         # Weights out of this layer
-        
-        # Create new weights and biases for the new neuron
-        if constant_value is not None:
-            new_weights_in = np.full((1, current_weights.shape[1]), constant_value)
-            new_bias_in = np.full(1, constant_value)
-            new_weights_out = np.full(next_weights.shape[0], constant_value)
+        if layer_idx == 0:
+            # For input layer, only need to modify weights to first hidden layer
+            next_weights = self.weights[0]
+            if constant_value is not None:
+                new_weights_out = np.full(next_weights.shape[0], constant_value)
+            else:
+                new_weights_out = np.zeros(next_weights.shape[0])
+            self.weights[0] = np.insert(next_weights, neuron_idx, new_weights_out, axis=1)
         else:
-            new_weights_in = np.zeros((1, current_weights.shape[1]))
-            new_bias_in = np.zeros(1)
-            new_weights_out = np.zeros(next_weights.shape[0])
-        
-        # Insert the new weights and biases at the specified position
-        self.weights[layer_idx - 1] = np.insert(current_weights, neuron_idx, new_weights_in, axis=0)
-        self.biases[layer_idx - 1] = np.insert(current_biases, neuron_idx, new_bias_in)
-        self.weights[layer_idx] = np.insert(next_weights, neuron_idx, new_weights_out, axis=1)
+            # For hidden layers, need to modify both incoming and outgoing weights
+            current_weights = self.weights[layer_idx - 1]  # Weights into this layer
+            current_biases = self.biases[layer_idx - 1]    # Biases into this layer
+            next_weights = self.weights[layer_idx]         # Weights out of this layer
+            
+            # Create new weights and biases for the new neuron
+            if constant_value is not None:
+                new_weights_in = np.full((1, current_weights.shape[1]), constant_value)
+                new_bias_in = np.full(1, constant_value)
+                new_weights_out = np.full(next_weights.shape[0], constant_value)
+            else:
+                new_weights_in = np.zeros((1, current_weights.shape[1]))
+                new_bias_in = np.zeros(1)
+                new_weights_out = np.zeros(next_weights.shape[0])
+            
+            # Insert the new weights and biases at the specified position
+            self.weights[layer_idx - 1] = np.insert(current_weights, neuron_idx, new_weights_in, axis=0)
+            self.biases[layer_idx - 1] = np.insert(current_biases, neuron_idx, new_bias_in)
+            self.weights[layer_idx] = np.insert(next_weights, neuron_idx, new_weights_out, axis=1)
 
     def prune_neuron(self, layer_idx: int, neuron_idx: int) -> None:
-        """Remove a neuron from a hidden layer.
+        """Remove a neuron from a layer.
         
         Args:
-            layer_idx: Index of the hidden layer to remove the neuron from (0-based)
+            layer_idx: Index of the layer to remove the neuron from (0-based)
             neuron_idx: Index within the layer of the neuron to remove (0-based)
+            
+        Raises:
+            ValueError: If layer_idx is invalid (must be input or hidden layer)
+            ValueError: If neuron_idx is out of bounds
         """
+        if layer_idx < 0 or layer_idx >= len(self.layer_sizes) - 1:
+            raise ValueError("Can only prune neurons from input or hidden layers")
+            
+        if neuron_idx < 0 or neuron_idx >= self.layer_sizes[layer_idx]:
+            raise ValueError(f"neuron_idx {neuron_idx} is out of bounds for layer {layer_idx}")
+            
         # Update layer sizes
         self.layer_sizes[layer_idx] -= 1
         
-        # Remove the neuron's incoming weights and bias
-        self.weights[layer_idx - 1] = np.delete(self.weights[layer_idx - 1], neuron_idx, axis=0)
-        self.biases[layer_idx - 1] = np.delete(self.biases[layer_idx - 1], neuron_idx)
-        
-        # Remove the neuron's outgoing weights
-        self.weights[layer_idx] = np.delete(self.weights[layer_idx], neuron_idx, axis=1)
+        if layer_idx == 0:
+            # For input layer, only need to modify weights to first hidden layer
+            self.weights[0] = np.delete(self.weights[0], neuron_idx, axis=1)
+        else:
+            # For hidden layers, need to modify both incoming and outgoing weights
+            self.weights[layer_idx - 1] = np.delete(self.weights[layer_idx - 1], neuron_idx, axis=0)
+            self.biases[layer_idx - 1] = np.delete(self.biases[layer_idx - 1], neuron_idx)
+            self.weights[layer_idx] = np.delete(self.weights[layer_idx], neuron_idx, axis=1)
 
     def insert_identity_layer(self, layer_idx: int, constant_value: Optional[float] = None) -> None:
         """Insert an identity hidden layer at the specified position, preserving network output.
