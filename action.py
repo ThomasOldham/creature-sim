@@ -3,8 +3,13 @@ import numpy as np
 from board import Board
 from creature_storage import CreatureStorage
 from execution_timer import timer_decorator
-from network_outputs import ACTION_ATTACK, ACTION_EAT, ACTION_HEAL, ACTION_UPGRADE, ACTION_MOVE, ACTION_REPRODUCE
-from creature_stats import EAT_RATE, MASS
+from network_outputs import (
+    ACTION_ATTACK, ACTION_EAT, ACTION_HEAL, ACTION_UPGRADE, ACTION_MOVE, ACTION_REPRODUCE,
+    PARAM_REPRODUCE_DX, PARAM_REPRODUCE_DY, PARAM_ATTACK_DX, PARAM_ATTACK_DY,
+    PARAM_MOVE_DX, PARAM_MOVE_DY, PARAM_OFFSPRING_MASS_FRACTION, PARAM_HEAL_MASS_FRACTION,
+    PARAMS_UPGRADE_MASS_FRACTIONS_START, PARAMS_UPGRADE_MASS_FRACTIONS_END
+)
+from creature_stats import EAT_RATE, MASS, NUM_UPGRADEABLE_STATS, HEAL_POWER, DAMAGE
 
 RESULT_SUCCESS = 0
 RESULT_COST = 1
@@ -44,7 +49,33 @@ def eat_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureS
 @timer_decorator('action.heal_action')
 def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                 board: Board, out: np.ndarray) -> np.ndarray:
-    return np.zeros((creature_storage.used_row_count(), RESULT_SIZE), dtype=np.float64)
+    # Get mass spent and heal power to calculate healing amount
+    heal_powers = creature_storage.stats[mask, HEAL_POWER]
+    mass_spent = params[mask, PARAM_HEAL_MASS_FRACTION]
+    healing_amounts = np.power(mass_spent, 0.9) * heal_powers
+    
+    # Calculate actual damage reduction (can't reduce below 0)
+    current_damage = creature_storage.stats[mask, DAMAGE]
+    damage_reduction = np.minimum(current_damage, healing_amounts)
+    
+    # Apply healing
+    creature_storage.stats[mask, DAMAGE] -= damage_reduction
+    creature_storage.stats[mask, MASS] -= mass_spent
+    
+    # Calculate success
+    # If no healing occurred, success is 0
+    # Otherwise, success is ratio of potential healing to actual healing
+    damage_reduction[damage_reduction <= 0.0] = 1.0
+    success = healing_amounts / damage_reduction
+    
+    # Set result values
+    out[mask, RESULT_SUCCESS] = success
+    out[mask, RESULT_COST] = mass_spent
+    out[mask, RESULT_KIND] = ACTION_HEAL
+    out[mask, RESULT_DIR_X] = 0.0  # No direction for healing
+    out[mask, RESULT_DIR_Y] = 0.0  # No direction for healing
+    
+    return out
 
 # TODO
 @timer_decorator('action.upgrade_action')
