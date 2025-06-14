@@ -1,11 +1,9 @@
-from typing import List
 import numpy as np
 import creature_stats
-from genome import Genome
 import network_outputs
 from input_transform_storage import InputTransformStorage
-from neural_network import NeuralNetwork
 from execution_timer import timer_decorator
+from creature_debug_info import CreatureDebugInfo
 
 class CreatureStorage:
     """Manages parallel arrays collectively representing Creatures.
@@ -26,6 +24,7 @@ class CreatureStorage:
         self._genome = np.full(1, None, dtype=object)
         self._network = np.full(1, None, dtype=object)
         self._grid_position = np.full((1, 2), -1, dtype=np.int64)
+        self._debug_info = np.full(1, None, dtype=object)
         
         # Track allocation state
         self._max_used_index = -1
@@ -66,6 +65,7 @@ class CreatureStorage:
                 new_genome = np.full(new_row_count, None, dtype=object)
                 new_network = np.full(new_row_count, None, dtype=object)
                 new_grid_position = np.full((new_row_count, 2), -1, dtype=np.int64)
+                new_debug_info = np.full(new_row_count, None, dtype=object)
                 # Copy old values
                 new_stats[:self.row_count, :] = self._stats
                 new_param_coefficients[:self.row_count, :] = self._param_coefficients
@@ -75,6 +75,7 @@ class CreatureStorage:
                 new_genome[:self.row_count] = self._genome
                 new_network[:self.row_count] = self._network
                 new_grid_position[:self.row_count, :] = self._grid_position
+                new_debug_info[:self.row_count] = self._debug_info
                 # Replace old arrays
                 self._stats = new_stats
                 self._param_coefficients = new_param_coefficients
@@ -84,6 +85,7 @@ class CreatureStorage:
                 self._genome = new_genome
                 self._network = new_network
                 self._grid_position = new_grid_position
+                self._debug_info = new_debug_info
                 self.row_count = new_row_count
         
         # Ensure we have enough features storages
@@ -96,6 +98,9 @@ class CreatureStorage:
         # Record the vision radius and features index
         self._vision_radius[index] = creature_vision_radius
         self._features_index[index] = features_index
+        
+        # Initialize debug info
+        self._debug_info[index] = CreatureDebugInfo()
         
         return index
     
@@ -159,3 +164,39 @@ class CreatureStorage:
     @property
     def features_index(self) -> np.ndarray:
         return self._features_index[:self.used_row_count()]
+    
+    @property
+    def debug_info(self) -> np.ndarray:
+        return self._debug_info[:self.used_row_count()]
+
+    def summary(self, index: int) -> str:
+        """Get a formatted summary of a creature's stats and information.
+        
+        Args:
+            index: Index of the creature to summarize
+            
+        Returns:
+            str: Multiline string containing creature information
+        """
+        if not 0 <= index <= self._max_used_index:
+            raise ValueError(f"Invalid row index: {index}")
+            
+        debug = self._debug_info[index]
+        network = self._network[index]
+        stats = self._stats[index]
+        
+        # Get neural network layer sizes if network exists
+        network_info = "No network" if network is None else str(network.layer_sizes)
+        
+        # Format the summary string
+        return f"""Index: {index}
+ID: {debug.id}
+Generation: {len(debug.ancestors)}
+Ancestors: {debug.ancestors}
+Neural network layer sizes: {network_info}
+Mass: {stats[creature_stats.MASS]:.3f}/{stats[creature_stats.MIN_MASS]:.3f}
+HP: {stats[creature_stats.MAX_HP] - stats[creature_stats.DAMAGE]:.3f}/{stats[creature_stats.MAX_HP]:.3f}
+Eat rate: {stats[creature_stats.EAT_RATE]:.3f}
+Move rate: {stats[creature_stats.MOVE_RATE]:.3f}
+Attack power: {stats[creature_stats.ATTACK_POWER]:.3f}
+Heal power: {stats[creature_stats.HEAL_POWER]:.3f}"""

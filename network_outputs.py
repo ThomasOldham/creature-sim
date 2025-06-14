@@ -1,15 +1,5 @@
 from creature_stats import NUM_UPGRADEABLE_STATS
-
-# Action kinds as integer constants
-ActionKind = int
-ACTION_NOTHING: ActionKind = -1  # placeholder action not selectable by neural network
-ACTION_ATTACK: ActionKind = 0
-ACTION_EAT: ActionKind = 1
-ACTION_HEAL: ActionKind = 2
-ACTION_UPGRADE: ActionKind = 3
-ACTION_MOVE: ActionKind = 4
-ACTION_REPRODUCE: ActionKind = 5
-ACTION_KINDS_COUNT = 6
+from action_kind import ACTION_KINDS_COUNT
 
 PARAMS_SNAP_DIR_START = 0
 PARAMS_SNAP_DIR_X_START = PARAMS_SNAP_DIR_START

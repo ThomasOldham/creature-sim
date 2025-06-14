@@ -3,8 +3,10 @@ import numpy as np
 from board import Board
 from creature_storage import CreatureStorage
 from execution_timer import timer_decorator
+from action_kind import (
+    ACTION_ATTACK, ACTION_EAT, ACTION_HEAL, ACTION_UPGRADE, ACTION_MOVE, ACTION_REPRODUCE
+)
 from network_outputs import (
-    ACTION_ATTACK, ACTION_EAT, ACTION_HEAL, ACTION_UPGRADE, ACTION_MOVE, ACTION_REPRODUCE,
     PARAM_REPRODUCE_DX, PARAM_REPRODUCE_DY, PARAM_ATTACK_DX, PARAM_ATTACK_DY,
     PARAM_MOVE_DX, PARAM_MOVE_DY, PARAM_OFFSPRING_MASS_FRACTION, PARAM_HEAL_MASS_FRACTION,
     PARAMS_UPGRADE_MASS_FRACTIONS_START, PARAMS_UPGRADE_MASS_FRACTIONS_END
@@ -158,7 +160,7 @@ def _handle_grid_movement(mask: np.ndarray, creature_storage: CreatureStorage, b
     """
     # Get current positions and sub-positions
     current_positions = creature_storage.grid_position[mask]
-    sub_positions = creature_storage.stats[mask, [SUB_X, SUB_Y]]
+    sub_positions = creature_storage.stats[mask][:, [SUB_X, SUB_Y]]
     
     # Calculate desired new grid positions, clamping to board bounds
     desired_positions = current_positions + np.floor(sub_positions).astype(np.int64)
@@ -212,7 +214,7 @@ def move_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     # Store initial positions for success calculation
     initial_grid_positions = creature_storage.grid_position[mask].copy()
-    initial_sub_positions = creature_storage.stats[mask, [SUB_X, SUB_Y]].copy()
+    initial_sub_positions = creature_storage.stats[mask][:, [SUB_X, SUB_Y]].copy()
     
     # Update sub-positions
     creature_storage.stats[mask, SUB_X] += intended_dx
@@ -235,7 +237,7 @@ def move_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     # Calculate actual movement
     final_grid_positions = creature_storage.grid_position[mask]
-    final_sub_positions = creature_storage.stats[mask, [SUB_X, SUB_Y]]
+    final_sub_positions = creature_storage.stats[mask][:, [SUB_X, SUB_Y]]
     actual_dx = (final_grid_positions[:, 0] + final_sub_positions[:, 0]) - \
                 (initial_grid_positions[:, 0] + initial_sub_positions[:, 0])
     actual_dy = (final_grid_positions[:, 1] + final_sub_positions[:, 1]) - \
@@ -280,6 +282,10 @@ def _select_actor_per_target(target_positions: np.ndarray, priorities: np.ndarra
         - selected_actor_indices are the indices of the actors that won their targets
         - selected_targets are the corresponding target positions
     """
+    # If no targets, return early with correct shapes
+    if len(target_positions) == 0:
+        return np.empty(0, dtype=np.int64), np.empty((0, 2), dtype=np.int64)
+    
     # Create a dictionary to track highest priority for each target
     target_to_priority = {}
     target_to_actor = {}
@@ -290,8 +296,8 @@ def _select_actor_per_target(target_positions: np.ndarray, priorities: np.ndarra
             target_to_actor[target_key] = i
     
     # Convert results to arrays
-    selected_targets = np.array(list(target_to_actor.keys()))
-    selected_actors = np.array(list(target_to_actor.values()))
+    selected_targets = np.array(list(target_to_actor.keys()), dtype=np.int64)
+    selected_actors = np.array(list(target_to_actor.values()), dtype=np.int64)
     
     return selected_actors, selected_targets
 
@@ -339,6 +345,8 @@ def reproduce_action(mask: np.ndarray, params: np.ndarray, creature_storage: Cre
         
         # Add the offspring creature
         offspring_idx = board.add_creature(offspring_genome)
+        reproducer_debug_info = creature_storage.debug_info[reproducer_idx]
+        creature_storage.debug_info[offspring_idx].ancestors = reproducer_debug_info.ancestors + [reproducer_debug_info.id]
         
         # Set offspring position
         creature_storage.grid_position[offspring_idx] = target

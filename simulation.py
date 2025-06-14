@@ -46,7 +46,8 @@ class Simulation:
                 continue
             vision_radius = creature_storage.vision_radius[index]
             features_index = creature_storage.features_index[index]
-            out[index] = creature_storage.network[index].forward(inputs[vision_radius][features_index])
+            features = inputs[vision_radius][features_index]
+            out[index] = creature_storage.network[index].forward(features)
         return out
     
     @timer_decorator('Simulation._execute_actions')
