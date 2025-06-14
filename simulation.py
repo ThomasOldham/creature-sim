@@ -39,14 +39,15 @@ class Simulation:
     def _get_outputs(self, out: Optional[np.ndarray] = None) -> np.ndarray:
         if not out:
             out = np.empty((self.board.creature_storage.used_row_count(), network_outputs.COUNT), dtype=np.float64)
-        inputs = self.board.all_features()
+        transformed_features = self.board.transformed_features()
+        action_features = creature.action_features(self.board.creature_storage)
         creature_storage = self.board.creature_storage
         for index in range(creature_storage.used_row_count()):
             if not creature_storage.is_alive[index]:
                 continue
             vision_radius = creature_storage.vision_radius[index]
             features_index = creature_storage.features_index[index]
-            features = inputs[vision_radius][features_index]
+            features = np.concatenate([transformed_features[vision_radius][features_index], action_features[index]])
             out[index] = creature_storage.network[index].forward(features)
         return out
     

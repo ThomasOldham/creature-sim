@@ -1,5 +1,6 @@
 from typing import Tuple
 import numpy as np
+from action_kind import ACTION_KINDS_COUNT
 from neural_network import NeuralNetwork
 import cell_stats
 import creature_stats
@@ -120,7 +121,7 @@ class Genome:
         ])
 
     def num_features(self) -> int:
-        return self.self_feature_coefficients.size + self.perception_feature_coefficients.size
+        return self.self_feature_coefficients.size + self.perception_feature_coefficients.size + ACTION_KINDS_COUNT
     
     _BRAIN_MASS_PER_FLOAT = 0.0001
     _BRAIN_MASS_PER_VISION_RADIUS_CUBED = 0.0 # TODO: penalize larger vision radii once it's evolvable

@@ -69,7 +69,7 @@ class Board:
             self.creature_storage.release(index)
     
     @timer_decorator('Board.all_features')
-    def all_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
+    def transformed_features(self, outs: Optional[List[np.ndarray]] = None) -> List[np.ndarray]:
         creature_storage = self.creature_storage
         if not outs:
             outs = [np.zeros((storage.used_row_count(), storage.feature_count)) for storage in creature_storage.features_storages]

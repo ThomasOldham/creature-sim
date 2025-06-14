@@ -40,6 +40,7 @@ class ExecutionTimer:
             ('creature.public_features', 7),
             ('Board._untransformed_features_for_vision_radius', 5),
             ('creature.transform_features', 5),
+            ('creature.action_features', 4),
             ('NeuralNetwork.forward', 4),
             ('creature.decide_action_kind', 3),
             ('creature._normalize_action_probabilities', 4),
