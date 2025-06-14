@@ -134,6 +134,13 @@ class Genome:
         vision_contribution = self.vision_radius ** 3 * self._BRAIN_MASS_PER_VISION_RADIUS_CUBED
         return network_contribution + vision_contribution
     
+    @timer_decorator('Genome.size')
+    def size(self) -> int:
+        ret = self.feature_coefficients().size + self.feature_biases().size + self.param_coefficients.size
+        for weights, biases in zip(self.network.weights, self.network.biases):
+            ret += weights.size + biases.size
+        return ret
+    
     def mutate(self) -> None:
         self._mutate_network_architecture()
         # self._mutate_vision() # TODO: temporary universal fixed vision radius
@@ -360,10 +367,14 @@ class Genome:
             self.network.prune_neuron(0, idx)
             self.mutation_control.network_mutsup.prune_neuron(0, idx)
 
-LARGE_INSERT_SUPPRESSION_TAX_BASE = 1.001
-SMALL_INSERT_SUPPRESSION_TAX_BASE = 1.01
-SMALL_DELETE_SUPPRESSION_TAX_BASE = 1.01
 POINT_MUTATION_SUPPRESSION_TAX_FACTOR = 0.2
+INTERVAL_SUPPRESSION_TAX_FACTORS = np.array([
+    0.01, # lose vision
+    0.01, # gain vision
+    0.1, # lose neuron
+    0.1, # gain neuron
+    0.01, # gain layer
+])
 _INDEL_CHANCE_FOR_GEO_MEAN_TAX = 0.1
 
 INDEL_TAX_CURVE_CONSTANT = _INDEL_CHANCE_FOR_GEO_MEAN_TAX * (1.0 - _INDEL_CHANCE_FOR_GEO_MEAN_TAX) / \

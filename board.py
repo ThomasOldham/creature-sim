@@ -168,3 +168,10 @@ class Board:
         stats = self.creature_storage.stats[:self.creature_storage.used_row_count()]
         starved_mask = stats[:, creature_stats.MASS] < stats[:, creature_stats.MIN_MASS]
         self.apply_death(np.where(starved_mask)[0])
+
+    @timer_decorator('Board.check_and_apply_killings')
+    def check_and_apply_killings(self) -> None:
+        """Kills any creature whose damage is greater than or equal to its max HP."""
+        stats = self.creature_storage.stats[:self.creature_storage.used_row_count()]
+        killed_mask = stats[:, creature_stats.DAMAGE] >= stats[:, creature_stats.MAX_HP]
+        self.apply_death(np.where(killed_mask)[0])
