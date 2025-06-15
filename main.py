@@ -12,9 +12,13 @@ import network_outputs
 import numpy as np
 
 sim = Simulation(40, 20, random_seed=42)
+board = sim.board
+creature_storage = board.creature_storage
 sim.run_round()
-index = sim.board.add_creature(Genome())
-sim.board.creature_storage.stats[index, creature.MASS] = 100.0
-creature.recalculate_min_mass(sim.board.creature_storage)
+index = board.add_creature(Genome())
+board.creatures[5,10] = index
+creature_storage.grid_position[index] = [5, 10]
+creature_storage.stats[index, creature.MASS] = 100.0
+creature.recalculate_min_mass(creature_storage)
 sim.run_round()
 embed()

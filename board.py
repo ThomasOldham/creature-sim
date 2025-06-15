@@ -175,3 +175,39 @@ class Board:
         stats = self.creature_storage.stats[:self.creature_storage.used_row_count()]
         killed_mask = stats[:, creature_stats.DAMAGE] >= stats[:, creature_stats.MAX_HP]
         self.apply_death(np.where(killed_mask)[0])
+
+    def display_ascii(self) -> None:
+        """Create and print an ASCII representation of the board.
+        
+        Each square shows:
+        - '.' for empty squares (with or without food)
+        - 'C' for a creature
+        
+        The board is shown with row and column numbers for clarity.
+        """
+        # If width>10, add column 10s-place numbers at the top
+        if self.width > 10:
+            header = "   "  # Space for row numbers
+            for x in range(self.width):
+                header += f"{x // 10}" if x % 10 == 0 else " "
+            print(header)
+
+        # Add column numbers at the top
+        header = "   "  # Space for row numbers
+        for x in range(self.width):
+            header += f"{x % 10}"  # Use modulo 10 to keep single digits
+        print(header)
+        
+        # Add a separator line
+        print("   " + "-" * self.width)
+        
+        # Add each row with its row number
+        for y in range(self.height):
+            row = []
+            for x in range(self.width):
+                if self.creatures[y, x] >= 0:
+                    row.append('C')
+                else:
+                    row.append('.')
+            # Add row number and content
+            print(f"{y:2d}|{''.join(row)}")
