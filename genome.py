@@ -128,10 +128,10 @@ class Genome:
     
     @timer_decorator('Genome.brain_mass')
     def brain_mass(self) -> np.float64:
-        float_count = self.feature_coefficients().size + self.feature_biases().size
+        network_parameter_count = 0
         for weights, biases in zip(self.network.weights, self.network.biases):
-            float_count += weights.size + biases.size
-        network_contribution = self._BRAIN_MASS_PER_FLOAT * float_count
+            network_parameter_count += weights.size + biases.size
+        network_contribution = self._BRAIN_MASS_PER_FLOAT * network_parameter_count
         vision_contribution = self.vision_radius ** 3 * self._BRAIN_MASS_PER_VISION_RADIUS_CUBED
         return network_contribution + vision_contribution
     
@@ -213,8 +213,8 @@ class Genome:
         proportional_noise = np.random.normal(0, self._PROPORTIONAL_NOISE_SCALE, values.shape)
         np.multiply(proportional_noise, values, out=proportional_noise)
         linear_noise = np.random.normal(0, self._LINEAR_NOISE_SCALE, values.shape)
-        noise = np.add(proportional_noise, linear_noise, out=linear_noise) # invalidates linear_noise
-        suppression_factor = np.exp(-mutsup, out=proportional_noise) # invalidates proportional_noise
+        noise = np.add(proportional_noise, linear_noise, out=linear_noise) # invalidates linear_noise to save an allocation
+        suppression_factor = np.exp(-mutsup, out=proportional_noise) # invalidates proportional_noise to save an allocation
         np.multiply(noise, suppression_factor, out=noise)
         np.add(values, noise, out=values)
         if np.any(values < min_value) | np.any(values > max_value):

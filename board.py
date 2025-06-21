@@ -55,13 +55,12 @@ class Board:
     def wrapup_round(self) -> None:
         self._apply_bmr()
         self._apply_starvation()
+        self.creature_storage.stats[:, creature_stats.AGE] += 1.0
 
     @timer_decorator('Board.apply_death')
     def apply_death(self, dead_creature_indices: np.ndarray) -> None:
-        self.creature_storage.is_alive[dead_creature_indices] = False
         dead_positions = self.creature_storage.grid_position[dead_creature_indices]
-        dead_masses = np.maximum(self.creature_storage.stats[:, creature_stats.MIN_MASS],
-                                  self.creature_storage.stats[:, creature_stats.MASS])
+        dead_masses = self.creature_storage.stats[dead_creature_indices, creature_stats.MASS]
         self.food[dead_positions[:, 1], dead_positions[:, 0]] += dead_masses
         self.creatures[dead_positions[:, 1], dead_positions[:, 0]] = -1
         self.creature_storage.is_alive[dead_creature_indices] = False
@@ -83,7 +82,7 @@ class Board:
     @timer_decorator('Board._add_food_rate_spikes')
     def _add_food_rate_spikes(self) -> None:
         spikes = np.random.rand(self.height, self.width)
-        np.power(spikes, 50.0, out=spikes)
+        np.power(spikes, 1000.0, out=spikes)
         np.add(self._food_rates, spikes, out=self._food_rates)
 
     @timer_decorator('Board._add_food')
@@ -92,10 +91,10 @@ class Board:
 
     @timer_decorator('Board._decay_food_rates')
     def _decay_food_rates(self) -> None:
-        np.multiply(self._food_rates, 0.993, out=self._food_rates)
+        np.multiply(self._food_rates, 0.997, out=self._food_rates)
     
     _ABIOGENESIS_THRESHOLD = 100.0
-    _ABIOGENESIS_CHANCE = 0.000001
+    _ABIOGENESIS_CHANCE = 0.0001
 
     @timer_decorator('Board._abiogenesis')
     def _abiogenesis(self) -> None:
@@ -114,7 +113,7 @@ class Board:
             self._cell_features_padding = self._max_vision
             self._cell_features = np.full((self.height+(2*self._max_vision), self.width+(2*self._max_vision), cell_stats.NUM_FEATURES), -1.0, dtype=np.float64)
         np.add(self.food, 1.0, out=self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, cell_stats.FOOD_FEATURE])
-        np.exp(self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, :cell_stats.NUM_GROUND_FEATURES], out=self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, :cell_stats.NUM_GROUND_FEATURES])
+        np.log10(self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, :cell_stats.NUM_GROUND_FEATURES], out=self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, :cell_stats.NUM_GROUND_FEATURES])
         self._creature_public_features(out = self._cell_features[self._max_vision:-self._max_vision, self._max_vision:-self._max_vision, cell_stats.NUM_GROUND_FEATURES:])
         return self._cell_features
 
@@ -165,14 +164,15 @@ class Board:
 
     @timer_decorator('Board._apply_starvation')
     def _apply_starvation(self) -> None:
-        stats = self.creature_storage.stats[:self.creature_storage.used_row_count()]
+        stats = self.creature_storage.stats
         starved_mask = stats[:, creature_stats.MASS] < stats[:, creature_stats.MIN_MASS]
-        self.apply_death(np.where(starved_mask)[0])
+        stats[starved_mask, creature_stats.MASS] = stats[starved_mask, creature_stats.MIN_MASS] # consider mass at time of death to be the minimum mass
+        self.apply_death(np.where(starved_mask & self.creature_storage.is_alive)[0])
 
     @timer_decorator('Board.check_and_apply_killings')
     def check_and_apply_killings(self) -> None:
         """Kills any creature whose damage is greater than or equal to its max HP."""
-        stats = self.creature_storage.stats[:self.creature_storage.used_row_count()]
+        stats = self.creature_storage.stats
         killed_mask = stats[:, creature_stats.DAMAGE] >= stats[:, creature_stats.MAX_HP]
         self.apply_death(np.where(killed_mask)[0])
 

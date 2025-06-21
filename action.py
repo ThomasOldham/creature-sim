@@ -11,7 +11,7 @@ from network_outputs import (
     PARAM_MOVE_DX, PARAM_MOVE_DY, PARAM_OFFSPRING_MASS_FRACTION, PARAM_HEAL_MASS_FRACTION,
     PARAMS_UPGRADE_MASS_FRACTIONS_START, PARAMS_UPGRADE_MASS_FRACTIONS_END
 )
-from creature_stats import EAT_RATE, MOVE_RATE, MASS, SUB_X, SUB_Y, UPGRADEABLE_STATS_START, UPGRADEABLE_STATS_END, UPGRADE_COSTS, HEAL_POWER, DAMAGE, ATTACK_POWER, LAST_DAMAGE_RECEIVED, LAST_DAMAGE_DX_SUM, LAST_DAMAGE_DY_SUM
+from creature_stats import EAT_RATE, MIN_MASS, MOVE_RATE, MASS, SUB_X, SUB_Y, UPGRADEABLE_STATS_START, UPGRADEABLE_STATS_END, UPGRADE_COSTS, HEAL_POWER, DAMAGE, ATTACK_POWER, LAST_DAMAGE_RECEIVED, LAST_DAMAGE_DX_SUM, LAST_DAMAGE_DY_SUM
 from genome import Genome, indel_suppression_tax_curve, INTERVAL_SUPPRESSION_TAX_FACTORS, POINT_MUTATION_SUPPRESSION_TAX_FACTOR
 
 RESULT_SUCCESS = 0
@@ -21,14 +21,13 @@ RESULT_DIR_X = 3
 RESULT_DIR_Y = 4
 RESULT_SIZE = 5
 
-# TODO
 @timer_decorator('action.attack_action')
 def attack_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                    board: Board, out: np.ndarray) -> np.ndarray:
     # Get attacker positions and calculate target positions
     attacker_positions = creature_storage.grid_position[mask]
-    attack_dx = params[mask, PARAM_ATTACK_DX]
-    attack_dy = params[mask, PARAM_ATTACK_DY]
+    attack_dx = params[mask, PARAM_ATTACK_DX].astype(np.int64)
+    attack_dy = params[mask, PARAM_ATTACK_DY].astype(np.int64)
     target_positions = attacker_positions + np.column_stack((attack_dx, attack_dy))
     
     # Set border to -1 to treat edge cells as unoccupied
@@ -70,7 +69,6 @@ def attack_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creatu
     
     return out
 
-# TODO
 @timer_decorator('action.eat_action')
 def eat_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                board: Board, out: np.ndarray) -> np.ndarray:
@@ -91,7 +89,6 @@ def eat_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureS
     
     return out
 
-# TODO
 @timer_decorator('action.heal_action')
 def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                 board: Board, out: np.ndarray) -> np.ndarray:
@@ -123,7 +120,6 @@ def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     return out
 
-# TODO
 @timer_decorator('action.upgrade_action')
 def upgrade_action(mask: np.ndarray, params: np.ndarray, creature_storage: CreatureStorage,
                    board: Board, out: np.ndarray) -> np.ndarray:
@@ -221,10 +217,10 @@ def move_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     creature_storage.stats[mask, SUB_Y] += intended_dy
     
     # Find creatures trying to move grid positions
-    grid_move_mask = (creature_storage.stats[mask, SUB_X] >= 1.0) | \
-                    (creature_storage.stats[mask, SUB_Y] >= 1.0) | \
-                    (creature_storage.stats[mask, SUB_X] < 0.0) | \
-                    (creature_storage.stats[mask, SUB_Y] < 0.0)
+    grid_move_mask = ((creature_storage.stats[:, SUB_X] >= 1.0) | \
+                    (creature_storage.stats[:, SUB_Y] >= 1.0) | \
+                    (creature_storage.stats[:, SUB_X] < 0.0) | \
+                    (creature_storage.stats[:, SUB_Y] < 0.0)) & mask
     
     # Handle grid movement
     grid_moved_mask = _handle_grid_movement(grid_move_mask, creature_storage, board)
@@ -251,7 +247,7 @@ def move_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     # Calculate cost
     cost = MAX_MOVE_COST_PER_DIMENSION * creature_storage.stats[mask, MASS] * \
-           (np.abs(base_dx) + np.abs(base_dy))
+           ((base_dx*base_dx) + (base_dy*base_dy))
     
     # Set result values
     out[mask, RESULT_SUCCESS] = success
@@ -306,8 +302,8 @@ def reproduce_action(mask: np.ndarray, params: np.ndarray, creature_storage: Cre
                      board: Board, out: np.ndarray) -> np.ndarray:
     # Get reproducer positions and calculate target positions
     reproducer_positions = creature_storage.grid_position[mask]
-    reproduce_dx = params[mask, PARAM_REPRODUCE_DX]
-    reproduce_dy = params[mask, PARAM_REPRODUCE_DY]
+    reproduce_dx = params[mask, PARAM_REPRODUCE_DX].astype(np.int64)
+    reproduce_dy = params[mask, PARAM_REPRODUCE_DY].astype(np.int64)
     target_positions = reproducer_positions + np.column_stack((reproduce_dx, reproduce_dy))
     
     # Set border to non-negative to treat edge cells as occupied

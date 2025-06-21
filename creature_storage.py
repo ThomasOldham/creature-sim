@@ -191,8 +191,11 @@ class CreatureStorage:
         # Format the summary string
         return f"""Index: {index}
 ID: {debug.id}
+Alive? {self._is_alive[index]}
+Position: {self._grid_position[index,0]}+{self._stats[index, creature_stats.SUB_X]:.3f}, {self._grid_position[index,1]}+{self._stats[index, creature_stats.SUB_Y]:.3f}
 Generation: {len(debug.ancestors)}
 Ancestors: {debug.ancestors}
+Age: {stats[creature_stats.AGE]:.3f}
 Neural network layer sizes: {network_info}
 Mass: {stats[creature_stats.MASS]:.3f}/{stats[creature_stats.MIN_MASS]:.3f}
 HP: {stats[creature_stats.MAX_HP] - stats[creature_stats.DAMAGE]:.3f}/{stats[creature_stats.MAX_HP]:.3f}
@@ -200,3 +203,6 @@ Eat rate: {stats[creature_stats.EAT_RATE]:.3f}
 Move rate: {stats[creature_stats.MOVE_RATE]:.3f}
 Attack power: {stats[creature_stats.ATTACK_POWER]:.3f}
 Heal power: {stats[creature_stats.HEAL_POWER]:.3f}"""
+    
+    def summarize(self, index: int) -> None:
+        print(self.summary(index))
