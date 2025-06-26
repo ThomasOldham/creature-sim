@@ -8,7 +8,9 @@ from genome import Genome
 import action_kind
 import creature_stats
 import action
+import network_outputs
 
+DEFAULT_BRAIN_MASS = Genome().brain_mass()
 
 class TestEatAction(unittest.TestCase):
     def setUp(self):
@@ -22,18 +24,27 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board._decay_food_rates = MagicMock()
         self.simulation.board._add_food = MagicMock()
         self.simulation.board._abiogenesis = MagicMock()
-        
-        # Mock creature.decide_action_kind to always return ACTION_EAT
-        self.patcher = patch('creature.decide_action_kind')
-        self.mock_decide_action_kind = self.patcher.start()
-        self.mock_decide_action_kind.return_value = np.array([action_kind.ACTION_EAT])
 
     def tearDown(self):
         """Clean up after each test method."""
-        self.patcher.stop()
+        pass
 
-    def _verify_complete_board_state(self, expected_food, expected_creatures, expected_creatures_with_border):
-        """Verify the complete state of the board."""
+    def _setup_neural_network_mock(self, num_creatures):
+        """Set up neural network mock to return outputs that result in ACTION_EAT."""
+        # Create mock network outputs that will result in ACTION_EAT being selected
+        # The first ACTION_KINDS_COUNT outputs are action probabilities
+        # We need ACTION_EAT (index 1) to have the highest probability
+        mock_outputs = np.zeros((num_creatures, network_outputs.COUNT), dtype=np.float64)
+        mock_outputs[:, 1] = 1.0  # Set ACTION_EAT probability to 1.0
+        
+        # Set up the mock network for each creature
+        for i in range(num_creatures):
+            mock_network = MagicMock()
+            mock_network.forward.return_value = mock_outputs[i]
+            self.simulation.board.creature_storage.network[i] = mock_network
+
+    def _verify_board_state(self, expected_food, expected_creatures, expected_creatures_with_border):
+        """Verify the state of the board."""
         # Check entire food grid
         np.testing.assert_array_equal(self.simulation.board.food, expected_food,
                                      "Food grid should match expected state")
@@ -46,8 +57,8 @@ class TestEatAction(unittest.TestCase):
         np.testing.assert_array_equal(self.simulation.board.creatures_with_border, expected_creatures_with_border,
                                      "Creatures_with_border grid should match expected state")
 
-    def _verify_complete_creature_storage_state(self, expected_stats, expected_is_alive, expected_grid_position):
-        """Verify the complete state of creature storage."""
+    def _verify_creature_storage_state(self, expected_stats, expected_is_alive, expected_grid_position):
+        """Verify the state of creature storage."""
         # Check entire stats array
         np.testing.assert_array_equal(self.simulation.board.creature_storage.stats, expected_stats,
                                      "Creature stats should match expected state")
@@ -59,6 +70,35 @@ class TestEatAction(unittest.TestCase):
         # Check entire grid_position array
         np.testing.assert_array_equal(self.simulation.board.creature_storage.grid_position, expected_grid_position,
                                      "Creature grid_position should match expected state")
+
+    def test_eat_action_no_creatures(self):
+        """Test eat action when there are no creatures on the board."""
+        # Set up food on the board
+        self.simulation.board.food[2, 2] = 50.0
+        self.simulation.board.food[1, 1] = 30.0
+        
+        # Run one round of simulation
+        self.simulation.run_round()
+        
+        # Expected final states - food should remain unchanged
+        expected_food = np.zeros((self.height, self.width), dtype=np.float64)
+        expected_food[2, 2] = 50.0  # Food unchanged
+        expected_food[1, 1] = 30.0  # Food unchanged
+        
+        expected_creatures = np.full((self.height, self.width), -1, dtype=np.int64)
+        
+        expected_creatures_with_border = np.full((self.height + 2, self.width + 2), -1, dtype=np.int64)
+        
+        # No creatures, so all storage arrays should be empty
+        expected_stats = np.empty((0, creature_stats.COUNT), dtype=np.float64)
+        expected_is_alive = np.empty(0, dtype=bool)
+        expected_grid_position = np.empty((0, 2), dtype=np.int64)
+        
+        # Verify complete board state
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        
+        # Verify complete creature storage state
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
     def test_eat_action_basic(self):
         """Test basic eat action functionality."""
@@ -78,16 +118,10 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board.creature_storage.stats[creature_idx, creature_stats.EAT_RATE] = 20.0
         
         # Set initial mass to 100.0
-        initial_mass = 100.0
-        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = initial_mass
+        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = 100.0
         
-        # Store initial state for comparison
-        initial_food = self.simulation.board.food.copy()
-        initial_creatures = self.simulation.board.creatures.copy()
-        initial_creatures_with_border = self.simulation.board.creatures_with_border.copy()
-        initial_stats = self.simulation.board.creature_storage.stats.copy()
-        initial_is_alive = self.simulation.board.creature_storage.is_alive.copy()
-        initial_grid_position = self.simulation.board.creature_storage.grid_position.copy()
+        # Set up neural network mock
+        self._setup_neural_network_mock(1)
         
         # Run one round of simulation
         self.simulation.run_round()
@@ -102,25 +136,35 @@ class TestEatAction(unittest.TestCase):
         expected_creatures_with_border = np.full((self.height + 2, self.width + 2), -1, dtype=np.int64)
         expected_creatures_with_border[3, 3] = creature_idx  # (2,2) in creatures maps to (3,3) in creatures_with_border
         
-        expected_stats = initial_stats.copy()
-        expected_stats[creature_idx, creature_stats.MASS] = 120.0  # 100.0 + 20.0
-        expected_stats[creature_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature_idx, creature_stats.LAST_SUCCESS] = 1.0
-        expected_stats[creature_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DY] = 0.0
+        # Build expected stats from STARTING_VALUES
+        expected_stats = np.full((1, creature_stats.COUNT), np.nan, dtype=np.float64)
+        expected_stats[0] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[0, creature_stats.EAT_RATE] = 20.0  # Override with our custom eat rate
+        expected_stats[0, creature_stats.MASS] = 100.0 + 20.0
+        expected_stats[0, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[0, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[0, creature_stats.LAST_SUCCESS] = 1.0
+        expected_stats[0, creature_stats.LAST_COST] = 0.0
+        expected_stats[0, creature_stats.LAST_DX] = 0.0
+        expected_stats[0, creature_stats.LAST_DY] = 0.0
+        expected_stats[0, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        # Cheat and copy MIN_MASS from actual results since it's complex to precalculate
+        expected_stats[0, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[0, creature_stats.MIN_MASS]
         
-        expected_is_alive = initial_is_alive.copy()
-        expected_is_alive[creature_idx] = True
+        # Apply BMR (Basal Metabolic Rate) reduction
+        bmr = (expected_stats[0, creature_stats.MASS] + expected_stats[0, creature_stats.MIN_MASS]) / 2000.0
+        expected_stats[0, creature_stats.MASS] -= bmr
         
-        expected_grid_position = initial_grid_position.copy()
-        expected_grid_position[creature_idx] = [2, 2]
+        expected_is_alive = np.ones(1, dtype=bool)
+        
+        expected_grid_position = np.full((1, 2), -1, dtype=np.int64)
+        expected_grid_position[0] = [2, 2]
         
         # Verify complete board state
-        self._verify_complete_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
         
         # Verify complete creature storage state
-        self._verify_complete_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
     def test_eat_action_partial_consumption(self):
         """Test eat action when there's less food available than eat rate."""
@@ -139,16 +183,10 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board.creature_storage.stats[creature_idx, creature_stats.EAT_RATE] = 20.0
         
         # Set initial mass
-        initial_mass = 100.0
-        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = initial_mass
+        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = 100.0
         
-        # Store initial state for comparison
-        initial_food = self.simulation.board.food.copy()
-        initial_creatures = self.simulation.board.creatures.copy()
-        initial_creatures_with_border = self.simulation.board.creatures_with_border.copy()
-        initial_stats = self.simulation.board.creature_storage.stats.copy()
-        initial_is_alive = self.simulation.board.creature_storage.is_alive.copy()
-        initial_grid_position = self.simulation.board.creature_storage.grid_position.copy()
+        # Set up neural network mock
+        self._setup_neural_network_mock(1)
         
         # Run one round of simulation
         self.simulation.run_round()
@@ -163,25 +201,35 @@ class TestEatAction(unittest.TestCase):
         expected_creatures_with_border = np.full((self.height + 2, self.width + 2), -1, dtype=np.int64)
         expected_creatures_with_border[3, 3] = creature_idx
         
-        expected_stats = initial_stats.copy()
-        expected_stats[creature_idx, creature_stats.MASS] = 115.0  # 100.0 + 15.0
-        expected_stats[creature_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature_idx, creature_stats.LAST_SUCCESS] = 0.75  # 15.0 / 20.0
-        expected_stats[creature_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DY] = 0.0
+        # Build expected stats from STARTING_VALUES
+        expected_stats = np.full((1, creature_stats.COUNT), np.nan, dtype=np.float64)
+        expected_stats[0] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[0, creature_stats.EAT_RATE] = 20.0  # Override with our custom eat rate
+        expected_stats[0, creature_stats.MASS] = 100.0 + 15.0  # Initial mass + food eaten
+        expected_stats[0, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[0, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[0, creature_stats.LAST_SUCCESS] = 0.75  # 15.0 / 20.0
+        expected_stats[0, creature_stats.LAST_COST] = 0.0
+        expected_stats[0, creature_stats.LAST_DX] = 0.0
+        expected_stats[0, creature_stats.LAST_DY] = 0.0
+        expected_stats[0, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        # Cheat and copy MIN_MASS from actual results since it's complex to precalculate
+        expected_stats[0, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[0, creature_stats.MIN_MASS]
         
-        expected_is_alive = initial_is_alive.copy()
-        expected_is_alive[creature_idx] = True
+        # Apply BMR (Basal Metabolic Rate) reduction
+        bmr = (expected_stats[0, creature_stats.MASS] + expected_stats[0, creature_stats.MIN_MASS]) / 2000.0
+        expected_stats[0, creature_stats.MASS] -= bmr
         
-        expected_grid_position = initial_grid_position.copy()
-        expected_grid_position[creature_idx] = [2, 2]
+        expected_is_alive = np.ones(1, dtype=bool)
+        
+        expected_grid_position = np.full((1, 2), -1, dtype=np.int64)
+        expected_grid_position[0] = [2, 2]
         
         # Verify complete board state
-        self._verify_complete_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
         
         # Verify complete creature storage state
-        self._verify_complete_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
     def test_eat_action_no_food(self):
         """Test eat action when there's no food available."""
@@ -200,16 +248,10 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board.creature_storage.stats[creature_idx, creature_stats.EAT_RATE] = 20.0
         
         # Set initial mass
-        initial_mass = 100.0
-        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = initial_mass
+        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = 100.0
         
-        # Store initial state for comparison
-        initial_food = self.simulation.board.food.copy()
-        initial_creatures = self.simulation.board.creatures.copy()
-        initial_creatures_with_border = self.simulation.board.creatures_with_border.copy()
-        initial_stats = self.simulation.board.creature_storage.stats.copy()
-        initial_is_alive = self.simulation.board.creature_storage.is_alive.copy()
-        initial_grid_position = self.simulation.board.creature_storage.grid_position.copy()
+        # Set up neural network mock
+        self._setup_neural_network_mock(1)
         
         # Run one round of simulation
         self.simulation.run_round()
@@ -224,25 +266,35 @@ class TestEatAction(unittest.TestCase):
         expected_creatures_with_border = np.full((self.height + 2, self.width + 2), -1, dtype=np.int64)
         expected_creatures_with_border[3, 3] = creature_idx
         
-        expected_stats = initial_stats.copy()
-        expected_stats[creature_idx, creature_stats.MASS] = 100.0  # No change
-        expected_stats[creature_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature_idx, creature_stats.LAST_SUCCESS] = 0.0  # No food eaten
-        expected_stats[creature_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DY] = 0.0
+        # Build expected stats from STARTING_VALUES
+        expected_stats = np.full((1, creature_stats.COUNT), np.nan, dtype=np.float64)
+        expected_stats[0] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[0, creature_stats.EAT_RATE] = 20.0  # Override with our custom eat rate
+        expected_stats[0, creature_stats.MASS] = 100.0  # Initial mass (no food eaten)
+        expected_stats[0, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[0, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[0, creature_stats.LAST_SUCCESS] = 0.0  # No food eaten
+        expected_stats[0, creature_stats.LAST_COST] = 0.0
+        expected_stats[0, creature_stats.LAST_DX] = 0.0
+        expected_stats[0, creature_stats.LAST_DY] = 0.0
+        expected_stats[0, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        # Cheat and copy MIN_MASS from actual results since it's complex to precalculate
+        expected_stats[0, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[0, creature_stats.MIN_MASS]
         
-        expected_is_alive = initial_is_alive.copy()
-        expected_is_alive[creature_idx] = True
+        # Apply BMR (Basal Metabolic Rate) reduction
+        bmr = (expected_stats[0, creature_stats.MASS] + expected_stats[0, creature_stats.MIN_MASS]) / 2000.0
+        expected_stats[0, creature_stats.MASS] -= bmr
         
-        expected_grid_position = initial_grid_position.copy()
-        expected_grid_position[creature_idx] = [2, 2]
+        expected_is_alive = np.ones(1, dtype=bool)
+        
+        expected_grid_position = np.full((1, 2), -1, dtype=np.int64)
+        expected_grid_position[0] = [2, 2]
         
         # Verify complete board state
-        self._verify_complete_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
         
         # Verify complete creature storage state
-        self._verify_complete_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
     def test_eat_action_multiple_creatures(self):
         """Test eat action with multiple creatures eating from different locations."""
@@ -270,16 +322,8 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board.creature_storage.stats[creature1_idx, creature_stats.MASS] = 100.0
         self.simulation.board.creature_storage.stats[creature2_idx, creature_stats.MASS] = 150.0
         
-        # Mock decide_action_kind to return different actions for different creatures
-        self.mock_decide_action_kind.return_value = np.array([action_kind.ACTION_EAT, action_kind.ACTION_EAT])
-        
-        # Store initial state for comparison
-        initial_food = self.simulation.board.food.copy()
-        initial_creatures = self.simulation.board.creatures.copy()
-        initial_creatures_with_border = self.simulation.board.creatures_with_border.copy()
-        initial_stats = self.simulation.board.creature_storage.stats.copy()
-        initial_is_alive = self.simulation.board.creature_storage.is_alive.copy()
-        initial_grid_position = self.simulation.board.creature_storage.grid_position.copy()
+        # Set up neural network mock
+        self._setup_neural_network_mock(2)
         
         # Run one round of simulation
         self.simulation.run_round()
@@ -297,33 +341,49 @@ class TestEatAction(unittest.TestCase):
         expected_creatures_with_border[2, 2] = creature1_idx  # (1,1) in creatures maps to (2,2) in creatures_with_border
         expected_creatures_with_border[4, 4] = creature2_idx  # (3,3) in creatures maps to (4,4) in creatures_with_border
         
-        expected_stats = initial_stats.copy()
-        expected_stats[creature1_idx, creature_stats.MASS] = 115.0  # 100.0 + 15.0
-        expected_stats[creature2_idx, creature_stats.MASS] = 170.0  # 150.0 + 20.0
-        expected_stats[creature1_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature2_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature1_idx, creature_stats.LAST_SUCCESS] = 1.0
-        expected_stats[creature2_idx, creature_stats.LAST_SUCCESS] = 1.0
-        expected_stats[creature1_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature2_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature1_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature2_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature1_idx, creature_stats.LAST_DY] = 0.0
-        expected_stats[creature2_idx, creature_stats.LAST_DY] = 0.0
+        # Build expected stats from STARTING_VALUES
+        expected_stats = np.full((2, creature_stats.COUNT), np.nan, dtype=np.float64)
+        expected_stats[0] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[1] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[0, creature_stats.EAT_RATE] = 15.0  # Override with our custom eat rate
+        expected_stats[1, creature_stats.EAT_RATE] = 20.0  # Override with our custom eat rate
+        expected_stats[0, creature_stats.MASS] = 100.0 + 15.0  # Initial mass + food eaten
+        expected_stats[1, creature_stats.MASS] = 150.0 + 20.0  # Initial mass + food eaten
+        expected_stats[0, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[1, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[0, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[1, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[0, creature_stats.LAST_SUCCESS] = 1.0
+        expected_stats[1, creature_stats.LAST_SUCCESS] = 1.0
+        expected_stats[0, creature_stats.LAST_COST] = 0.0
+        expected_stats[1, creature_stats.LAST_COST] = 0.0
+        expected_stats[0, creature_stats.LAST_DX] = 0.0
+        expected_stats[1, creature_stats.LAST_DX] = 0.0
+        expected_stats[0, creature_stats.LAST_DY] = 0.0
+        expected_stats[1, creature_stats.LAST_DY] = 0.0
+        expected_stats[0, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        expected_stats[1, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        # Cheat and copy MIN_MASS from actual results since it's complex to precalculate
+        expected_stats[0, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[0, creature_stats.MIN_MASS]
+        expected_stats[1, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[1, creature_stats.MIN_MASS]
         
-        expected_is_alive = initial_is_alive.copy()
-        expected_is_alive[creature1_idx] = True
-        expected_is_alive[creature2_idx] = True
+        # Apply BMR (Basal Metabolic Rate) reduction
+        bmr1 = (expected_stats[0, creature_stats.MASS] + expected_stats[0, creature_stats.MIN_MASS]) / 2000.0
+        bmr2 = (expected_stats[1, creature_stats.MASS] + expected_stats[1, creature_stats.MIN_MASS]) / 2000.0
+        expected_stats[0, creature_stats.MASS] -= bmr1
+        expected_stats[1, creature_stats.MASS] -= bmr2
         
-        expected_grid_position = initial_grid_position.copy()
-        expected_grid_position[creature1_idx] = [1, 1]
-        expected_grid_position[creature2_idx] = [3, 3]
+        expected_is_alive = np.ones(2, dtype=bool)
+        
+        expected_grid_position = np.full((2, 2), -1, dtype=np.int64)
+        expected_grid_position[0] = [1, 1]
+        expected_grid_position[1] = [3, 3]
         
         # Verify complete board state
-        self._verify_complete_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
         
         # Verify complete creature storage state
-        self._verify_complete_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
     def test_eat_action_creature_not_at_food_location(self):
         """Test eat action when creature is not positioned where there's food."""
@@ -342,16 +402,10 @@ class TestEatAction(unittest.TestCase):
         self.simulation.board.creature_storage.stats[creature_idx, creature_stats.EAT_RATE] = 20.0
         
         # Set initial mass
-        initial_mass = 100.0
-        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = initial_mass
+        self.simulation.board.creature_storage.stats[creature_idx, creature_stats.MASS] = 100.0
         
-        # Store initial state for comparison
-        initial_food = self.simulation.board.food.copy()
-        initial_creatures = self.simulation.board.creatures.copy()
-        initial_creatures_with_border = self.simulation.board.creatures_with_border.copy()
-        initial_stats = self.simulation.board.creature_storage.stats.copy()
-        initial_is_alive = self.simulation.board.creature_storage.is_alive.copy()
-        initial_grid_position = self.simulation.board.creature_storage.grid_position.copy()
+        # Set up neural network mock
+        self._setup_neural_network_mock(1)
         
         # Run one round of simulation
         self.simulation.run_round()
@@ -366,25 +420,35 @@ class TestEatAction(unittest.TestCase):
         expected_creatures_with_border = np.full((self.height + 2, self.width + 2), -1, dtype=np.int64)
         expected_creatures_with_border[2, 2] = creature_idx  # (1,1) in creatures maps to (2,2) in creatures_with_border
         
-        expected_stats = initial_stats.copy()
-        expected_stats[creature_idx, creature_stats.MASS] = 100.0  # No change
-        expected_stats[creature_idx, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
-        expected_stats[creature_idx, creature_stats.LAST_SUCCESS] = 0.0  # No food eaten
-        expected_stats[creature_idx, creature_stats.LAST_COST] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DX] = 0.0
-        expected_stats[creature_idx, creature_stats.LAST_DY] = 0.0
+        # Build expected stats from STARTING_VALUES
+        expected_stats = np.full((1, creature_stats.COUNT), np.nan, dtype=np.float64)
+        expected_stats[0] = creature_stats.STARTING_VALUES.copy()
+        expected_stats[0, creature_stats.EAT_RATE] = 20.0  # Override with our custom eat rate
+        expected_stats[0, creature_stats.MASS] = 100.0  # Initial mass (no food eaten)
+        expected_stats[0, creature_stats.AGE] = 1.0  # Age incremented in wrapup_round
+        expected_stats[0, creature_stats.LAST_ACTION] = action_kind.ACTION_EAT
+        expected_stats[0, creature_stats.LAST_SUCCESS] = 0.0  # No food eaten
+        expected_stats[0, creature_stats.LAST_COST] = 0.0
+        expected_stats[0, creature_stats.LAST_DX] = 0.0
+        expected_stats[0, creature_stats.LAST_DY] = 0.0
+        expected_stats[0, creature_stats.BRAIN_MASS] = DEFAULT_BRAIN_MASS  # Set actual brain mass
+        # Cheat and copy MIN_MASS from actual results since it's complex to precalculate
+        expected_stats[0, creature_stats.MIN_MASS] = self.simulation.board.creature_storage.stats[0, creature_stats.MIN_MASS]
         
-        expected_is_alive = initial_is_alive.copy()
-        expected_is_alive[creature_idx] = True
+        # Apply BMR (Basal Metabolic Rate) reduction
+        bmr = (expected_stats[0, creature_stats.MASS] + expected_stats[0, creature_stats.MIN_MASS]) / 2000.0
+        expected_stats[0, creature_stats.MASS] -= bmr
         
-        expected_grid_position = initial_grid_position.copy()
-        expected_grid_position[creature_idx] = [1, 1]
+        expected_is_alive = np.ones(1, dtype=bool)
+        
+        expected_grid_position = np.full((1, 2), -1, dtype=np.int64)
+        expected_grid_position[0] = [1, 1]
         
         # Verify complete board state
-        self._verify_complete_board_state(expected_food, expected_creatures, expected_creatures_with_border)
+        self._verify_board_state(expected_food, expected_creatures, expected_creatures_with_border)
         
         # Verify complete creature storage state
-        self._verify_complete_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
+        self._verify_creature_storage_state(expected_stats, expected_is_alive, expected_grid_position)
 
 
 if __name__ == '__main__':

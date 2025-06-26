@@ -62,11 +62,8 @@ class Simulation:
             attack_action(attack_mask, action_params, self.board.creature_storage, self.board, out=out)
 
         # the other actions
-        action_kind_masks = [
-            self.board.creature_storage.is_alive & (action_kinds == kind)
-            for kind in range(1, network_outputs.ACTION_KINDS_COUNT)
-        ]
-        for kind, mask in enumerate(action_kind_masks):
+        for kind in range(1, network_outputs.ACTION_KINDS_COUNT):
+            mask = self.board.creature_storage.is_alive & (action_kinds == kind)
             if not mask.any():
                 continue
             ACTION_FUNCTIONS[kind](mask, action_params, self.board.creature_storage, self.board, out)
