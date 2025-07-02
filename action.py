@@ -107,9 +107,9 @@ def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     # Calculate success
     # If no healing occurred, success is 0
-    # Otherwise, success is ratio of potential healing to actual healing
-    damage_reduction[damage_reduction <= 0.0] = 1.0
-    success = healing_amounts / damage_reduction
+    # Otherwise, success is ratio of actual healing to potential healing
+    healing_amounts[healing_amounts <= 0.0] = 1.0
+    success = damage_reduction / healing_amounts
     
     # Set result values
     out[mask, RESULT_SUCCESS] = success
