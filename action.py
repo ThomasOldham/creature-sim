@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Tuple
 import numpy as np
 from board import Board
@@ -103,7 +104,6 @@ def heal_action(mask: np.ndarray, params: np.ndarray, creature_storage: Creature
     
     # Apply healing
     creature_storage.stats[mask, DAMAGE] -= damage_reduction
-    creature_storage.stats[mask, MASS] -= mass_spent
     
     # Calculate success
     # If no healing occurred, success is 0
@@ -333,10 +333,10 @@ def reproduce_action(mask: np.ndarray, params: np.ndarray, creature_storage: Cre
     final_masses = valid_masses[final_reproducer_indices]
     
     # Perform the reproductions
-    for i, (target, mass, reproducer_idx) in enumerate(zip(final_targets, final_masses, original_indices)):
+    for target, mass, reproducer_idx in zip(final_targets, final_masses, original_indices):
         # Create and mutate offspring genome
         parent_genome = creature_storage.genome[reproducer_idx]
-        offspring_genome = parent_genome.deep_copy()
+        offspring_genome = deepcopy(parent_genome)
         offspring_genome.mutate()
         
         # Add the offspring creature

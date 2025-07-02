@@ -72,7 +72,7 @@ class Simulation:
     @timer_decorator('Simulation._apply_action_results')
     def _apply_action_results(self, action_results: np.ndarray) -> None:
         creature_storage = self.board.creature_storage
-        stats = creature_storage.stats
+        stats = creature_storage.stats[:len(action_results)]
         np.subtract(stats[:, creature_stats.MASS], action_results[:, action.RESULT_COST], out=stats[:, creature_stats.MASS])
         stats[:, creature_stats.LAST_SUCCESS] = action_results[:, action.RESULT_SUCCESS]
         stats[:, creature_stats.LAST_COST] = action_results[:, action.RESULT_COST]

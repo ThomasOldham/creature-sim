@@ -17,7 +17,7 @@ class MutationControl:
     """A mutable named tuple of factors that control genome mutation."""
 
     INTERVAL_LOSE_VISION = 0
-    INVERVAL_GAIN_VISION = 1
+    INTERVAL_GAIN_VISION = 1
     INTERVAL_LOSE_NEURON = 2
     INTERVAL_GAIN_NEURON = 3
     INTERVAL_GAIN_LAYER = 4
@@ -165,12 +165,14 @@ class Genome:
         
         self._mutate_interval(self.mutation_control.interval_mutation_rates, self.mutation_control.meta_mutsup)
 
-        self.mutation_control.meta_mutsup = self._mutate_positive(np.array([self.mutation_control.meta_mutsup]), self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)[0]
+        meta_mutsup_array = np.array([self.mutation_control.meta_mutsup])
+        self._mutate_positive(meta_mutsup_array, self.mutation_control.meta_mutsup, SMALLEST_EXPONENT_ALLOWED, BIGGEST_EXPONENT_ALLOWED)
+        self.mutation_control.meta_mutsup = meta_mutsup_array[0]
 
     def _mutate_network_architecture(self) -> None:
         """Mutate the neural network architecture by potentially adding/removing layers and neurons."""
         # Possibly insert an identity layer
-        if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_GAIN_LAYER]:
+        if np.random.random() < self.mutation_control.interval_mutation_rates[MutationControl.INTERVAL_GAIN_LAYER]:
             layer_idx = np.random.randint(1, len(self.network.layer_sizes))
             self.network.insert_identity_layer(layer_idx)
             # Mirror the layer insertion in the suppression network with constant suppression
@@ -181,13 +183,13 @@ class Genome:
         layer_idx = 1
         while layer_idx < num_layers - 1:
             # Chance to insert a neuron
-            if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_GAIN_NEURON]:
+            if np.random.random() < self.mutation_control.interval_mutation_rates[MutationControl.INTERVAL_GAIN_NEURON]:
                 neuron_idx = np.random.randint(self.network.layer_sizes[layer_idx] + 1)
                 self.network.insert_neuron(layer_idx, neuron_idx)
                 # Mirror the neuron insertion in the suppression network with constant suppression
                 self.mutation_control.network_mutsup.insert_neuron(layer_idx, neuron_idx, constant_value=self.mutation_control.average_mutsup)
             # Chance to prune a neuron or the whole layer
-            if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_LOSE_NEURON]:
+            if np.random.random() < self.mutation_control.interval_mutation_rates[MutationControl.INTERVAL_LOSE_NEURON]:
                 if self.network.layer_sizes[layer_idx] == 1:
                     self.network.prune_layer(layer_idx)
                     # Mirror the layer pruning in the suppression network
@@ -203,9 +205,9 @@ class Genome:
             layer_idx += 1
     
     def _mutate_vision(self) -> None:
-        if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_GAIN_VISION]:
+        if np.random.random() < self.mutation_control.interval_mutation_rates[MutationControl.INTERVAL_GAIN_VISION]:
             self._increment_vision_radius()
-        if np.random.random() < self.mutation_control.interval_mutation_rates[self.INTERVAL_LOSE_VISION]:
+        if np.random.random() < self.mutation_control.interval_mutation_rates[MutationControl.INTERVAL_LOSE_VISION]:
             if self.vision_radius > 0:
                 self._decrement_vision_radius()
 
